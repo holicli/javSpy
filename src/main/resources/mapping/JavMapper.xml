@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.mapper.JavMapper">
+    <insert id="insertMovie">
+        INSERT INTO your_table_name (
+            censored_id, movie_title, movie_pic_cover, release_date, movie_length,
+            Director, Studio, Label, Series, Genre, JAV_Idols, sample_dmm,
+            have_mg, have_file, have_hd, have_sub, have_hdbtso, have_mgbtso, have_file2,
+            favorite, wanted, watched, owned, visited,
+            blogjav_img, magnet_date
+        ) VALUES (
+                     #{id}, #{title}, #{img}, #{date}, #{videoLength},
+                     #{director.id}, #{studio}, #{label}, #{series}, #{genre}, #{javIdols}, #{sampleDmm},
+                     #{haveMg}, #{haveFile}, #{haveHd}, #{haveSub}, #{haveHdbtso}, #{haveMgbtso}, #{haveFile2},
+                     #{favorite}, #{wanted}, #{watched}, #{owned}, #{visited},
+                     #{blogjavImg}, #{magnetDate}
+                 )
+    </insert>
+
+    <select id="getMovieCount" resultType="java.lang.Integer">
+        select COUNT(*) from avbook_javbus_movie
+    </select>
+    <select id="existsByTitle" resultType="java.lang.Boolean">
+        select * from avbook_avmoo_movie where censored_id = #{id}
+    </select>
+</mapper>
