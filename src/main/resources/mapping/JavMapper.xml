@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.holic.javspy.mapper.JavMapper">
     <insert id="insertMovie">
-        INSERT INTO your_table_name (
+        INSERT INTO avbook_avmoo_movie (
             censored_id, movie_title, movie_pic_cover, release_date, movie_length,
             Director, Studio, Label, Series, Genre, JAV_Idols, sample_dmm,
             have_mg, have_file, have_hd, have_sub, have_hdbtso, have_mgbtso, have_file2,
