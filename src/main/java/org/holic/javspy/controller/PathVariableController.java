@@ -16,43 +16,57 @@
 
 package org.holic.javspy.controller;
 
+import org.holic.javspy.misc.ResultPage;
+import org.holic.javspy.model.NewMovie;
 import org.holic.javspy.service.JavService;
 import org.holic.javspy.service.MovieApiService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * @author <a href="mailto:chenxilzx1@gmail.com">theonefx</a>
  */
 @Controller
 public class PathVariableController {
+
+    @Value("${conf.qbittorrent.qbtUrl}")
+    String qbtUrl;
+    @Value("${conf.qbittorrent.username}")
+    String username;
+    @Value("${conf.qbittorrent.password}")
+    String password;
+
     @Autowired
     private JavService javService;
     @Autowired
     private MovieApiService movieApiService;
 
-    // http://127.0.0.1:8080/user/123/roles/222
-    @RequestMapping(value = "/user/{userId}/roles/{roleId}", method = RequestMethod.GET)
-    @ResponseBody
-    public String getLogin(@PathVariable("userId") String userId, @PathVariable("roleId") String roleId) {
-        return "User Id : " + userId + " Role Id : " + roleId;
+    @RequestMapping("/")
+    public String getHomePage(){
+        return "newmovie";
     }
 
     // http://127.0.0.1:8080/javabeat/somewords
-    @RequestMapping(value = "/javabeat/{regexp1:[a-z-]+}", method = RequestMethod.GET)
+    @RequestMapping(value = "/javabeat/somewords", method = RequestMethod.GET)
     @ResponseBody
-    public String getRegExp(@PathVariable("regexp1") String regexp1) {
-        return "URI Part : " + regexp1;
+    public String getRegExp() {
+        return "qbtUrl" + qbtUrl+",username"+username+",password"+password;
     }
 
     @RequestMapping(value = "/javabeat/getfromdb", method = RequestMethod.GET)
     @ResponseBody
     public Integer getfromdb() {
+        return javService.getMovie();
+    }
 
-        return javService.getmovie();
+    @RequestMapping(value = "/getNewMovie", method = RequestMethod.GET)
+    @ResponseBody
+    public ResultPage<List<NewMovie>> getNewMovie(@RequestParam("page") Integer page, @RequestParam("size") String size) throws IOException {
+        return ResultPage.ok(javService.getNewMovie(page));
     }
 }

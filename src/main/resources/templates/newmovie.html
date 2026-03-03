@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新片无限滚动 · 电影管理</title>
+    <!-- 使用简洁的极简样式，同时保证图片预览与滚动加载 -->
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        }
+        body {
+            background: #f5f7fa;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 1400px;
+            width: 100%;
+        }
+        h2 {
+            font-weight: 500;
+            color: #1e293b;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            border-left: 5px solid #3b82f6;
+            padding-left: 1rem;
+        }
+        .table-wrapper {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            overflow: auto;
+            max-height: 80vh;          /* 让表格主体滚动，触发底部加载 */
+            border: 1px solid #e9eef2;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;          /* 保证大表格不挤压，横向滚动 */
+            table-layout: auto;
+        }
+        th {
+            background: #f8fafd;
+            color: #334155;
+            font-weight: 600;
+            font-size: 0.9rem;
+            padding: 1rem 0.8rem;
+            white-space: nowrap;
+            border-bottom: 1px solid #dde3e9;
+            position: sticky;
+            top: 0;
+            background: #f1f5f9;
+            z-index: 10;
+        }
+        td {
+            padding: 1rem 0.8rem;
+            border-bottom: 1px solid #edf2f6;
+            color: #1e293b;
+            font-size: 0.9rem;
+            vertical-align: middle;
+            transition: background 0.1s;
+        }
+        tr:hover td {
+            background-color: #fafcff;
+        }
+        /* 封面列图片容器 */
+        .cover-cell {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .cover-img {
+            width: 50px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s;
+            display: block;
+        }
+        /* 悬停放大效果 —— 针对第一列图片 */
+        .cover-img:hover {
+            transform: scale(2.5);           /* 放大2.5倍，可根据喜好调整 */
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+            z-index: 100;
+            position: relative;
+            border-radius: 8px;
+        }
+        /* 演员、文字等长内容省略 */
+        .text-ellipsis {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* 标签样式 */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .badge-green {
+            background: #e0f2e7;
+            color: #0e6245;
+        }
+        .badge-gray {
+            background: #eef1f4;
+            color: #4b5565;
+        }
+        .exists-y {
+            color: #0b7e43;
+            font-weight: 500;
+        }
+        .exists-n {
+            color: #b91c1c;
+        }
+        /* 下载按钮 */
+        .download-btn {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            padding: 0.4rem 1rem;
+            border-radius: 40px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 2px 5px rgba(59,130,246,0.3);
+            transition: background 0.15s, transform 0.1s;
+            border: 1px solid transparent;
+        }
+        .download-btn:hover {
+            background: #2563eb;
+        }
+        .download-btn:active {
+            transform: scale(0.96);
+        }
+        /* 底部加载指示器 */
+        .loading-indicator {
+            text-align: center;
+            padding: 1.2rem;
+            color: #64748b;
+            font-size: 0.9rem;
+            border-top: 1px dashed #d4dfe9;
+            background: #f9fbfd;
+        }
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #cbd5e1;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* 状态提示 */
+        .error-tip {
+            color: #b91c1c;
+            background: #fee2e2;
+            padding: 0.5rem 1rem;
+            border-radius: 30px;
+            display: inline-block;
+        }
+        /* 空数据占位 */
+        .empty-row td {
+            padding: 3rem;
+            text-align: center;
+            color: #94a3b8;
+        }
+        footer {
+            margin-top: 20px;
+            color: #6b7b8f;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>🎬 最新电影 · 无限滚动</h2>
+    <div class="table-wrapper" id="scrollTableWrapper">
+        <table>
+            <thead>
+            <tr>
+                <th>封面</th>
+                <th>番号</th>
+                <th>标题</th>
+                <th>演员</th>
+                <th>是否为单体作品</th>
+                <th>推荐链接</th>
+                <th>大小</th>
+                <th>日期</th>
+                <th>是否存在于Emby</th>
+                <th>是否于下载列表</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="tableBody">
+            <!-- 动态渲染的数据会追加在此 -->
+            <tr class="empty-row"><td colspan="11">加载中，请稍后...</td></tr>
+            </tbody>
+        </table>
+        <!-- 底部加载区域 (滚动触发) -->
+        <div id="loadMoreTrigger" class="loading-indicator">
+            <span class="spinner"></span> 加载更多...
+        </div>
+    </div>
+    <footer>
+        <span>⚡ 滚动至底部自动加载下一页 · 鼠标移到封面放大</span>
+        <span id="pageInfo">第 1 页</span>
+    </footer>
+</div>
+
+<script>
+    (function() {
+        // ---------- 模拟后端交互 · 真实使用时替换为fetch API  ----------
+        // 基础路径，假设与后端同域；若跨域需处理CORS
+        const BASE_URL = '';  // 例如 'http://localhost:8080' 或留空相对路径
+
+        // 当前页码 (从1开始)
+        let currentPage = 1;
+        // 是否正在加载数据 (防止重复请求)
+        let isLoading = false;
+        // 是否还有更多数据 (当接口返回空列表或长度不足时标记为false)
+        let hasMore = true;
+        // 存储已加载的所有电影数据 (用于展示)
+        let allMovies = [];
+
+        // DOM 元素
+        const tbody = document.getElementById('tableBody');
+        const loadMoreDiv = document.getElementById('loadMoreTrigger');
+        const pageSpan = document.getElementById('pageInfo');
+        const scrollContainer = document.getElementById('scrollTableWrapper');
+
+        // ---------- 辅助函数 ----------
+        // 格式化布尔值显示
+        function formatExists(exists) {
+            if (exists === true) return '<span class="exists-y">✅ 存在</span>';
+            if (exists === false) return '<span class="exists-n">❌ 不存在</span>';
+            return '<span class="exists-n">未知</span>';
+        }
+
+        // 安全截断文本
+        function ellipsis(str, maxLen = 30) {
+            if (!str) return '';
+            return str.length > maxLen ? str.substr(0, maxLen) + '…' : str;
+        }
+
+        // 构建下载按钮 (调用 /startDownload 接口)
+        function renderDownloadButton(movie) {
+            // 使用 data-idnumber 或其它唯一标识，假设用 idNumber 作为标识传给后台
+            // 根据实际情况你可能需要传整个对象或某个id；此处以 idNumber 为主，若无则传title
+            const identifier = movie.idNumber || movie.title || '未知';
+            // 注意转义引号
+            return `<button class="download-btn" data-movie='${JSON.stringify(movie).replace(/'/g, "&apos;")}' data-id="${identifier}">⬇️ 下载</button>`;
+        }
+
+        // 将单个电影对象渲染为HTML行字符串 (请注意XSS风险: 使用文本转义, 但coverUrl, actors等来自接口可信任?)
+        // 为了安全，这里使用纯文本赋值，但图片src和按钮data属性需要保留url格式。我们假定后台返回内容安全。
+        function renderMovieRow(movie) {
+            // 处理各字段默认值
+            const cover = movie.coverUrl || 'https://via.placeholder.com/50x70?text=No+Img';
+            const idNumber = movie.idNumber || '—';
+            const title = movie.title || '—';
+            const actors = movie.actors || '—';
+            const isSingle = movie.isSingle || '—';
+            // linkUrl 可能用作显示短链接
+            const linkUrl = movie.linkUrl ? (movie.linkUrl.length > 25 ? movie.linkUrl.substr(0, 22)+'…' : movie.linkUrl) : '—';
+            const size = movie.size || '—';
+            const date = movie.date || '—';
+            const existsHtml = formatExists(movie.exists);
+            const existsDownload =  formatExists(movie.isDownload);
+            const downloadBtn = renderDownloadButton(movie);
+
+            return `<tr>
+                <td class="cover-cell">
+                    <img src="${cover}" alt="cover" class="cover-img" loading="lazy" onerror="this.src='https://via.placeholder.com/50x70?text=Error'">
+                </td>
+                <td>${ellipsis(idNumber, 15)}</td>
+                <td>${ellipsis(title, 20)}</td>
+                <td><span class="text-ellipsis" title="${(actors || '').replace(/"/g, '&quot;')}">${ellipsis(actors, 25)}</span></td>
+                <td>${ellipsis(isSingle, 10)}</td>
+                <td><a href="${movie.linkUrl || '#'}" target="_blank" title="${movie.linkUrl || ''}">${linkUrl}</a></td>
+                <td>${size}</td>
+                <td>${date}</td>
+                <td>${existsHtml}</td>
+                <td>${existsDownload}</td>
+                <td>${downloadBtn}</td>
+            </tr>`;
+        }
+
+        // 批量追加渲染
+        function appendMovies(movies) {
+            if (!movies || movies.length === 0) {
+                // 若无数据，隐藏加载更多，标记无更多
+                hasMore = false;
+                loadMoreDiv.style.display = 'none';
+                return;
+            }
+            // 移除可能的空行占位
+            const emptyRow = tbody.querySelector('.empty-row');
+            if (emptyRow) tbody.innerHTML = '';
+
+            let htmlRows = '';
+            movies.forEach(m => {
+                htmlRows += renderMovieRow(m);
+            });
+            tbody.insertAdjacentHTML('beforeend', htmlRows);
+        }
+
+        // 重置状态（重新加载第一页时使用）
+        function resetAndLoadFirst() {
+            currentPage = 1;
+            hasMore = true;
+            allMovies = [];
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="11">加载中，请稍后...</td></tr>';
+            loadMoreDiv.style.display = 'flex';  // 显示加载条
+            loadMoreDiv.innerHTML = `<span class="spinner"></span> 加载更多...`;
+            fetchPage(currentPage);
+        }
+
+        // ---------- 请求接口 /getNewMovie ----------
+        async function fetchPage(page) {
+            if (isLoading || !hasMore) return;
+
+            isLoading = true;
+            // 更改底部样式
+            loadMoreDiv.innerHTML = `<span class="spinner"></span> 正在加载第 ${page} 页...`;
+
+            try {
+                // 注意：后端接口要求 @RequestParam("page") Integer page, @RequestParam("size") String size
+                // 其中 size 来自 NewMovie 对象的 size 字段，但接口额外接收 String size，这里我们传固定值 '10' 作为每页数量（和后台商议）
+                // 如果后台的 javService.getNewMovie(page) 实现中自行决定了分页大小，那 size 可以忽略，但我们仍需传一个默认值。
+                const sizeParam = '10';  // 可根据实际情况调整
+                const url = `${BASE_URL}/getNewMovie?page=${page}&size=${sizeParam}`;
+
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+
+                var result = await response.json();
+
+                // 假设 ResultPage 结构为 { code, msg, data: List<NewMovie> } 根据实际调整
+                // 这里兼容 ResultPage 包装: 我们期望 result.data 是数组
+                let movies = [];
+                if (result && Array.isArray(result.data.list)) {
+                    movies = result.data.list;
+                } else if (Array.isArray(result)) {
+                    movies = result;   // 如果直接返回数组
+                } else {
+                    console.warn('接口返回格式异常', result);
+                    movies = [];
+                }
+
+                // 更新页码信息
+                pageSpan.innerText = `第 ${page} 页`;
+
+                if (movies.length === 0) {
+                    // 无更多数据
+                    hasMore = false;
+                    loadMoreDiv.innerHTML = `🏁 没有更多电影了`;
+                    // 如果是第一页且无数据，保留空行提示
+                    if (page === 1 && tbody.children.length === 1) {
+                        tbody.innerHTML = '<tr class="empty-row"><td colspan="11">暂无电影数据</td></tr>';
+                    }
+                } else {
+                    // 追加到表格
+                    appendMovies(movies);
+                    // 累计记录
+                    allMovies = [...allMovies, ...movies];
+                    // 如果返回数量少于每页数量（比如 < 10），认为没有更多页 (取决于业务，可按需调整)
+                    if (movies.length < 10) {   // 10 是上方sizeParam，需要一致
+                        hasMore = false;
+                        loadMoreDiv.innerHTML = `🏁 已加载全部 (共 ${allMovies.length} 条)`;
+                    } else {
+                        // 保持加载更多状态
+                        loadMoreDiv.innerHTML = `⬇️ 向下滚动加载更多...`;
+                    }
+                }
+
+            } catch (error) {
+                console.error('获取电影列表失败:', error);
+                loadMoreDiv.innerHTML = `<span class="error-tip">⚠️ 加载失败，<a href="javascript:void(0)" onclick="window.location.reload()">重试</a></span>`;
+                // 出错时不修改 hasMore 太多，尝试保留
+                // 如果第一页出错显示错误行
+                if (page === 1) {
+                    tbody.innerHTML = `<tr class="empty-row"><td colspan="11">加载失败，请刷新页面</td></tr>`;
+                }
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        // ---------- 滚动触发加载更多 ----------
+        function onScrollHandler() {
+            if (!hasMore || isLoading) return;
+
+            const container = scrollContainer;
+            // 触发点：当滚动到离底部还有30px时加载
+            const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            if (scrollBottom < 40) {
+                // 加载下一页
+                currentPage++;
+                fetchPage(currentPage);
+            }
+        }
+
+        // 防抖处理 (简单防抖)
+        let scrollTimer;
+        scrollContainer.addEventListener('scroll', () => {
+            if (scrollTimer) clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(onScrollHandler, 100);
+        });
+
+        // ---------- 操作按钮: 调用 /startDownload (通过事件委托) ----------
+        tbody.addEventListener('click', (e) => {
+            const btn = e.target.closest('.download-btn');
+            if (!btn) return;
+
+            // 获取电影数据 (存在 data-movie 属性中)
+            const movieStr = btn.getAttribute('data-movie');
+            let movie;
+            try {
+                movie = JSON.parse(movieStr);
+            } catch (err) {
+                console.warn('解析movie数据失败', movieStr);
+                alert('无法获取电影信息');
+                return;
+            }
+
+            // 调用后台 /startDownload 接口 (POST 或 GET, 根据实际)
+            // 假设接口为 GET /startDownload?param=xxx 或 POST JSON
+            // 这里我们采用 POST JSON 方式，携带必要信息（例如 idNumber）
+            const downloadApi = `${BASE_URL}/startDownload`;
+
+            // 示例：使用POST, 传递电影标识
+            fetch(downloadApi, {
+                method: 'POST',   // 若后端为GET可自行调整
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idNumber: movie.idNumber, title: movie.title, linkUrl: movie.linkUrl })
+            })
+                .then(res => {
+                    if (!res.ok) throw new Error(`下载请求失败 ${res.status}`);
+                    return res.text().then(text => {
+                        try { return JSON.parse(text); } catch { return text; }
+                    });
+                })
+                .then(data => {
+                    alert(`⏳ 下载任务已提交: ${movie.title || '电影'}`);
+                    console.log('下载接口响应', data);
+                })
+                .catch(err => {
+                    console.error('下载错误', err);
+                    alert('下载调用失败，请查看控制台');
+                });
+
+            // 阻止默认
+            e.preventDefault();
+        });
+
+        // ---------- 启动: 加载第一页 ----------
+        resetAndLoadFirst();
+
+        // 可选: 如果wrapper高度不够无法滚动，强行触发一次预加载（但一般情况下80vh足够）
+        // 如果容器高度大于内容高度，不会触发滚动，则主动拉取下一页吗？这里做一次检查：内容较少时预加载第二页
+        // 我们可以在第一次加载完成后，如果内容高度小于容器高度且有更多，则自动加载下一页
+        function checkAndLoadMoreIfNeeded() {
+            if (!hasMore || isLoading) return;
+            const container = scrollContainer;
+            if (container.scrollHeight <= container.clientHeight + 40) {
+                // 内容很少，没有溢出，自动尝试加载下一页
+                currentPage++;
+                fetchPage(currentPage);
+            }
+        }
+
+        // 利用 MutationObserver 监听表格变化，然后判断是否需要填充更多 (简单延时)
+        const observer = new MutationObserver(() => {
+            setTimeout(checkAndLoadMoreIfNeeded, 200);
+        });
+        observer.observe(tbody, { childList: true, subtree: true });
+
+    })();
+</script>
+
+<!-- 说明：如果实际后端接口地址或返回结构不同，请对应修改 fetch 部分和解析逻辑 -->
+</body>
+</html>
