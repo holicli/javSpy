@@ -3,6 +3,7 @@ package org.holic.javspy.service;
 import lombok.extern.slf4j.Slf4j;
 import org.holic.javspy.mapper.JavMapper;
 import org.holic.javspy.misc.ImageDownloadService;
+import org.holic.javspy.misc.QBittorrentAutoDownloader;
 import org.holic.javspy.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -162,18 +163,31 @@ public class JavService {
                 MovieDetail movieDetail = new MovieDetail();
                 List<Magnet> movieMagnets = new ArrayList<>();
                 if (existsByTitle(movie.getId())){
-//                    movieDetail = javMapper.getMovieDetail(movie.getId());
+                    movieDetail = javMapper.getMovieDetail(movie.getId());
+                    String gid = movieDetail.getGid();
+                    movieMagnets = javMapper.getMovieMagnets(gid);
                 }else {
                     movieDetail = movieApiService.getMovieDetail(movie.getId());
-//                    insertMovie(movieDetail);
+                    if (Objects.isNull(movieDetail)){
+                        continue;
+                    }
+                    if (Objects.nonNull(movieDetail.getStarstr())){
+                        movieDetail.setActors(movieDetail.getStarstr());
+                    }
+
+                    if (Objects.isNull(movie.getId())){
+                        continue;
+                    }
+                    insertMovie(movieDetail);
                     String gid = movieDetail.getGid();
                     String uc = movieDetail.getUc();
                     movieMagnets = movieApiService.getMovieMagnets(movie.getId(), gid, uc);
-//                    insertMagnets(movieMagnets,gid);
+                    if (movieMagnets.size() > 0){
+                        insertMagnets(movieMagnets, gid);
+                    }
                 }
                 NewMovie newMovie = new NewMovie();
-                String s = processMovieCover(movie).getImg();
-                movie.setImg(s);
+                movie.setImg(processMovieCover(movie).getImg());
                 Magnet suggestionMagnet = getSuggestionMagnet(movieMagnets);
                 newMovie.fullMovie(movie,movieDetail,suggestionMagnet);
                 newMovie.setExists(movieIsExsitInSystem.isInEmby(movie.getId()));
@@ -201,9 +215,11 @@ public class JavService {
     private Movie processMovieCover(Movie movie) throws IOException {
         if (movie != null && movie.getImg() != null && !movie.getImg().isEmpty()) {
 
-            String picurl = "http://192.168.0.108:18080/v1/images/primary/JavBus/"+movie.getId()+"?url="+movie.getImg()+"&ratio=-1&pos=1&auto=True&quality=90";
+//            String picurl = "http://192.168.0.108:18080/v1/images/primary/JavBus/"+movie.getId()+"?url="+movie.getImg()+"&ratio=-1&pos=1&auto=True&quality=90";
+//            String picurl2 = "http://192.168.0.108:18080/v1/images/primary/JavBus/"+movie.getId()+"_1?url="+movie.getImg()+"&ratio=-1&pos=1&auto=True&quality=90";
+            String picurl = "http://192.168.0.108:18080/v1/images/primary/JavBus/"+movie.getId()+"?ratio=-1&pos=-1&auto=False&quality=90";
             String imageUrl = imageDownloadService.getImageUrl(picurl, getImageName(movie.getImg()));
-
+//            String imageUrl2 = imageDownloadService.getImageUrl(picurl2, getImageName(movie.getImg()));
             movie.setImg(imageUrl);
         }
         return movie;
@@ -222,5 +238,38 @@ public class JavService {
         }
 
         return null;
+    }
+
+    public String startDownload(NewMovie newMovie) {
+        if (Objects.isNull(newMovie)){
+            return null;
+        }
+        // 配置信息
+        final String qbtUrl = "http://192.168.0.108:8085";
+
+        final String username= "admin";
+
+        final String password= "qwer1234";
+        // 创建下载器
+        QBittorrentAutoDownloader downloader = new QBittorrentAutoDownloader(qbtUrl);
+
+        // 1. 登录
+        if (downloader.login(username, password)) {
+            System.out.println("登录成功！");
+
+            // 5. 创建自动下载管理器
+            QBittorrentAutoDownloader.AutoDownloadManager manager = new QBittorrentAutoDownloader.AutoDownloadManager(downloader);
+
+            // 添加一些磁力链接到队列
+            if (Objects.nonNull(newMovie.getLinkUrl())) {
+                String magnetLink = newMovie.getLinkUrl();
+                downloader.addMagnet(magnetLink, "", "");
+            }
+            return "ok";
+
+        } else {
+            System.err.println("登录失败，请检查配置！");
+            return "fail";
+        }
     }
 }

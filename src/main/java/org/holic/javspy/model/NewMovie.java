@@ -28,7 +28,7 @@ public class NewMovie {
             this.linkText = magnet.getTitle();
             this.linkUrl = magnet.getLink();
             this.size = magnet.getSize();
-            this.actors = movieDetail.getStarstr();
+            this.actors = movieDetail.getActors();
         }
     }
 }

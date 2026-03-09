@@ -122,8 +122,12 @@ public class QBittorrentAutoDownloader {
             }
 
             // 添加更多选项
+            postData.append("&autoTMM=true");
             postData.append("&paused=false");  // 不暂停，立即开始下载
-            postData.append("&skip_checking=true");  // 跳过哈希检查
+//            postData.append("&skip_checking=true");  // 跳过哈希检查
+            postData.append("&stopCondition=None");
+
+
 
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("POST");
@@ -776,7 +780,6 @@ public class QBittorrentAutoDownloader {
 
             // 5. 创建自动下载管理器
             AutoDownloadManager manager = new AutoDownloadManager(downloader);
-
             // 添加一些磁力链接到队列
 //            manager.addToQueue("magnet:?xt=urn:btih:35a726d3f663a8ed2548fef31ddc988c7f2ee33c", true);
 

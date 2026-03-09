@@ -24,4 +24,6 @@ public interface JavMapper {
     MovieDetail getMovieDetail(String id);
 
     Integer insertMangnets(@Param("list")List<Magnet> movieMagnets,@Param("gid")String gid);
+
+    List<Magnet> getMovieMagnets(String gid);
 }

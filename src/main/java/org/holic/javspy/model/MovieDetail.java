@@ -29,6 +29,7 @@ public class MovieDetail {
     private String starstr;
     private String simstr;
     private String similarmoviesstr;
+    private String actors;
 
     public String getSimilarmoviesstr() {
         return similarMovies.stream()

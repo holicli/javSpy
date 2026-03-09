@@ -19,7 +19,7 @@
             padding: 2rem 1rem;
         }
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             width: 100%;
         }
         h2 {
@@ -87,9 +87,9 @@
         }
         /* 悬停放大效果 —— 针对第一列图片 */
         .cover-img:hover {
-            transform: scale(2.5);           /* 放大2.5倍，可根据喜好调整 */
+            transform: scale(3);           /* 放大2.5倍，可根据喜好调整 */
             box-shadow: 0 15px 30px rgba(0,0,0,0.2);
-            z-index: 100;
+            z-index: 999;
             position: relative;
             border-radius: 8px;
         }
@@ -195,11 +195,12 @@
 </head>
 <body>
 <div class="container">
-    <h2>🎬 最新电影 · 无限滚动</h2>
+    <h2></h2>
     <div class="table-wrapper" id="scrollTableWrapper">
         <table>
             <thead>
             <tr>
+                <th></th>
                 <th>封面</th>
                 <th>番号</th>
                 <th>标题</th>
@@ -291,6 +292,7 @@
             const downloadBtn = renderDownloadButton(movie);
 
             return `<tr>
+                <td></td>
                 <td class="cover-cell">
                     <img src="${cover}" alt="cover" class="cover-img" loading="lazy" onerror="this.src='https://via.placeholder.com/50x70?text=Error'">
                 </td>

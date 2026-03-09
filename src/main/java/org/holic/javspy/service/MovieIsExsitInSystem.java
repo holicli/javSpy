@@ -56,15 +56,15 @@ public class MovieIsExsitInSystem {
         List<String> qBitList = (List<String>) redisTemplate.opsForValue().get("qBitList");
         if (Objects.isNull(qBitList)){
             qBitList = qbittorrentDownloadNameQueue();
-            redisTemplate.opsForValue().set("qBitList",qBitList,1L, TimeUnit.DAYS);
+            redisTemplate.opsForValue().set("qBitList",qBitList,1L, TimeUnit.HOURS);
         }
         return qBitList;
     }
     public List<String> getEmbyList() {
         List<String> EmbyList = (List<String>) redisTemplate.opsForValue().get("EmbyList");
         if (Objects.isNull(EmbyList)){
-            EmbyList = qbittorrentDownloadNameQueue();
-            redisTemplate.opsForValue().set("EmbyList",EmbyList,1L, TimeUnit.DAYS);
+            EmbyList = embyNameList();
+            redisTemplate.opsForValue().set("EmbyList",EmbyList,1L, TimeUnit.HOURS);
         }
         return EmbyList;
     }
@@ -78,6 +78,7 @@ public class MovieIsExsitInSystem {
         return exists || exists2;
     }
     public Boolean isInEmby(String name){
-        return getEmbyList().contains(name);
+        List<String> embyList = getEmbyList();
+        return embyList.contains(name);
     }
 }

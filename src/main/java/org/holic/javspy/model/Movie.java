@@ -27,4 +27,6 @@ public class Movie {
     private String img;
     private String title;
     private List<String> tags;
+
+    private String bigimg;
 }

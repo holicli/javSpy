@@ -69,4 +69,10 @@ public class PathVariableController {
     public ResultPage<List<NewMovie>> getNewMovie(@RequestParam("page") Integer page, @RequestParam("size") String size) throws IOException {
         return ResultPage.ok(javService.getNewMovie(page));
     }
+
+    @RequestMapping("/startDownload")
+    @ResponseBody
+    public ResultPage<String> startDownload(@RequestBody NewMovie newMovie) {
+        return ResultPage.ok(javService.startDownload(newMovie));
+    }
 }
