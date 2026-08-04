@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javdb.mapper.JavdbMapper">
+
+    <sql id="allColumns">
+        id, code, title, cover_url, release_date, duration, director, studio,
+        publisher, series, actors, genres, description, detail_url, raw_html,
+        created_at, updated_at
+    </sql>
+
+    <select id="findByCode" resultType="org.holic.javspy.javdb.model.JavdbMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javdb_movie
+        WHERE code = #{code}
+        LIMIT 1
+    </select>
+
+    <select id="findByCodes" resultType="org.holic.javspy.javdb.model.JavdbMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javdb_movie
+        WHERE code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <insert id="insertMovie" parameterType="org.holic.javspy.javdb.model.JavdbMovie">
+        INSERT INTO javdb_movie (
+            code, title, cover_url, release_date, duration, director, studio,
+            publisher, series, actors, genres, description, detail_url, raw_html,
+            created_at, updated_at
+        ) VALUES (
+            #{code}, #{title}, #{coverUrl}, #{releaseDate}, #{duration}, #{director},
+            #{studio}, #{publisher}, #{series}, #{actors}, #{genres}, #{description},
+            #{detailUrl}, #{rawHtml}, NOW(), NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            title          = VALUES(title),
+            cover_url      = VALUES(cover_url),
+            release_date   = VALUES(release_date),
+            duration       = VALUES(duration),
+            director       = VALUES(director),
+            studio         = VALUES(studio),
+            publisher      = VALUES(publisher),
+            series         = VALUES(series),
+            actors         = VALUES(actors),
+            genres         = VALUES(genres),
+            description    = VALUES(description),
+            detail_url     = VALUES(detail_url),
+            updated_at     = NOW()
+    </insert>
+
+    <insert id="insertMagnets">
+        INSERT IGNORE INTO javdb_magnet (
+            code, detail_id, magnet, name, size_text, size_bytes,
+            share_date, hd, subtitle, created_at
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.code}, #{item.detailId}, #{item.magnet}, #{item.name},
+                #{item.sizeText}, #{item.sizeBytes}, #{item.shareDate},
+                #{item.hd}, #{item.subtitle}, NOW()
+            )
+        </foreach>
+    </insert>
+
+    <select id="searchMovies" resultType="org.holic.javspy.javdb.model.JavdbMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javdb_movie
+        <where>
+            <if test="code != null and code != ''">
+                AND code = #{code}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (title LIKE CONCAT('%', #{keyword}, '%')
+                     OR actors LIKE CONCAT('%', #{keyword}, '%')
+                     OR genres LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="releaseDate != null and releaseDate != ''">
+                AND release_date = #{releaseDate}
+            </if>
+        </where>
+        ORDER BY release_date DESC, id DESC
+    </select>
+</mapper>

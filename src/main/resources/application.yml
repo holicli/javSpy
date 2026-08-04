@@ -22,10 +22,10 @@ spring:
                 max-idle: 256
     #   ?????
     datasource:
-        driver-class-name: org.mariadb.jdbc.Driver
-        url: jdbc:mariadb://192.168.0.108:33306/avbook
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        url: jdbc:mysql://150.158.150.218:3306/javspy
         username: root
-        password: 123456
+        password: Pass1256
         hikari:
             maximum-pool-size: 500
             minimum-idle: 5
@@ -75,3 +75,18 @@ conf:
         apiKey: bd87f9a3632e4e409314ae45f71d99db
     serverchan:
         turboSendKey: SCT143060TvdXG7wJJmOtFAD6ZcVlL5WBY
+    javdb:
+        # javdb 站点地址
+        base-url: https://javdb.com
+        # 登录 cookie（浏览器登录 javdb 后复制，如 remember=xxx; ），
+        # 不配置时只能抓搜索页/部分详情，磁力链接通常需要 cookie
+        cookie: "eyJfcmFpbHMiOnsibWVzc2FnZSI6IklubE9TSHBHUjI4MlEyTnRSbFpJUzNaZlJWZ3hJZz09IiwiZXhwIjoiMjAyNi0wOC0xMVQwODo0MDoyNS4wMDBaIiwicHVyIjoiY29va2llLnJlbWVtYmVyX21lX3Rva2VuIn19--6501e847aabdf4054d90dd497f612f80e7b7d70d;"
+        # SOCKS5 代理（javdb 被墙时通过本地代理访问）
+        proxy-host: 127.0.0.1
+        proxy-port: 7890
+        # 单次请求超时（毫秒）
+        timeout-ms: 20000
+        # 两次请求间隔（毫秒），避免请求过快被封
+        request-interval-ms: 1500
+        # 是否在后台控制台直接打印抓到的 HTML（调试用）
+        print-html: false
