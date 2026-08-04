@@ -30,6 +30,11 @@ public class MovieDetail {
     private String simstr;
     private String similarmoviesstr;
     private String actors;
+    private String directorstr;
+    private String producerstr;
+    private String publisherstr;
+    private String seriesstr;
+
 
     public String getSimilarmoviesstr() {
         return similarMovies.stream()

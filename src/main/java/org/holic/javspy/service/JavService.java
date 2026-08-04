@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.holic.javspy.model.JavTableConstants.TABLE_DIRECTOR;
 import static org.holic.javspy.model.JavTableConstants.TABLE_STAR;
@@ -36,50 +37,18 @@ public class JavService {
     private MovieIsExsitInSystem movieIsExsitInSystem;
 
 
-    /**
-     * 获取并保存所有电影数据
-     *
-     * @return 成功保存的电影总数
-     */
-    public Integer getMovie() {
-        Integer totalSaved = 0;
-
-        try {
-            // 获取首页信息（第一页）
-            MovieResponse movies = movieApiService.getMovies();
-            saveMovieWithDetails(movies);
-            totalSaved = movies.getMovies().size();
-
-            Pagination pagination = movies.getPagination();
-
-            // 循环获取并保存后续页面的数据
-            while (pagination != null && pagination.isHasNextPage()) {
-                MovieResponse nextPageMovies = movieApiService.getNextPageMovies(pagination.getNextPage());
-                saveMovieWithDetails(nextPageMovies);
-                totalSaved += nextPageMovies.getMovies().size();
-                pagination = nextPageMovies.getPagination();
-
-                // 添加短暂延迟，避免请求过于频繁
-                Thread.sleep(100);
-            }
-            log.info("成功保存 {} 部电影数据", totalSaved);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("电影数据获取过程被中断", e);
-            throw new RuntimeException("数据获取过程被中断", e);
-        } catch (Exception e) {
-            log.error("获取电影数据时发生异常", e);
-            throw new RuntimeException("获取电影数据失败", e);
-        }
-
-        return totalSaved;
-    }
     //根据番号检查影片是否存在
     public Boolean existsByTitle(String id) {
         return javMapper.existsByTitle(id);
     }
     //插入影片信息
     public Integer insertMovie(MovieDetail movie) {
+        if (movie == null) {
+            return null;
+        }
+        if (movie.getId() == null) {
+            return null;
+        }
         return javMapper.insertMovie(movie);
     }
     //检查信息是否存在
@@ -96,7 +65,7 @@ public class JavService {
         }
         return javMapper.insertInfo2Tabel(table,id,JavTableConstants.getTableValueName().get(table),value);
     }
-    //当信息不存在时插入信息
+    //当女优信息不存在时插入信息
     public Boolean insertStar2Tabel(List<Star> list) throws InterruptedException {
         if (list.isEmpty()){
             return false;
@@ -104,7 +73,6 @@ public class JavService {
         List<Star> filteredList = new ArrayList<>();
         for (Star star : list) {
             if (!existsInfo(TABLE_STAR, star.getId())) {
-                Thread.sleep(100);
                 Star starDetail = movieApiService.getStarDetail(star.getId());
                 filteredList.add(starDetail);
             }
@@ -114,18 +82,25 @@ public class JavService {
         if (list.isEmpty()){
             return true;
         }
-        return javMapper.insertStar2DB(list);
+        List<Star> distinctList = list.stream()
+                .collect(Collectors.toMap(
+                        Star::getId,  // key: star.id
+                        star -> star, // value: star本身
+                        (existing, replacement) -> existing // 冲突时保留已存在的
+                ))
+                .values()
+                .stream()
+                .collect(Collectors.toList());
+        return javMapper.insertStar2DB(distinctList);
     }
 
-    public Boolean saveMovieWithDetails(MovieResponse movies) throws InterruptedException {
-        for (Movie movie : movies.getMovies()) {
+    public Boolean saveMovieWithDetails(MovieDetail movieDetail) throws InterruptedException {
             //由于影片的排序是按照发行时间排序，所以判断番号是否已经存在，如果存在就直接结束
-            if (existsByTitle(movie.getId())){
-                continue;
+            if (existsByTitle(movieDetail.getId())){
+
             }
             //todo 处理首页上的信息
             //根据影片番号获取相关信息
-            MovieDetail movieDetail = movieApiService.getMovieDetail(movie.getId());
             //保存影片相关信息
             Integer i = insertMovie(movieDetail);
             //保存导演信息
@@ -133,8 +108,6 @@ public class JavService {
                 if (Objects.nonNull(movieDetail.getId())){
                     insertInfo2Tabel(TABLE_DIRECTOR,movieDetail.getDirector().getId(),movieDetail.getDirector().getName());
                 }
-            }else {
-                continue;
             }
 
             //保存女优信息
@@ -143,12 +116,13 @@ public class JavService {
             }
 
             //todo 还有很多类似系类 工作室信息没有校验是否有新的并保存
-
-        }
         return false;
     }
 
-    public List<NewMovie> getNewMovie(Integer page) throws IOException {
+    public List<NewMovie> getNewMovie(Integer page,String keyword) throws IOException, InterruptedException {
+        if (keyword != null && !keyword.isEmpty()){
+
+        }
         List<NewMovie> list = new ArrayList<>();
         MovieResponse movieResponse = new MovieResponse();
         if (Objects.equals(page,0) || Objects.isNull(page)){
@@ -166,24 +140,19 @@ public class JavService {
                     movieDetail = javMapper.getMovieDetail(movie.getId());
                     String gid = movieDetail.getGid();
                     movieMagnets = javMapper.getMovieMagnets(gid);
+                    List<Star> stars = movieDetail.getStars();
                 }else {
                     movieDetail = movieApiService.getMovieDetail(movie.getId());
-                    if (Objects.isNull(movieDetail)){
-                        continue;
-                    }
-                    if (Objects.nonNull(movieDetail.getStarstr())){
-                        movieDetail.setActors(movieDetail.getStarstr());
-                    }
 
-                    if (Objects.isNull(movie.getId())){
-                        continue;
-                    }
-                    insertMovie(movieDetail);
-                    String gid = movieDetail.getGid();
-                    String uc = movieDetail.getUc();
-                    movieMagnets = movieApiService.getMovieMagnets(movie.getId(), gid, uc);
-                    if (movieMagnets.size() > 0){
-                        insertMagnets(movieMagnets, gid);
+//                    saveMovieWithDetails(movieDetail);
+                    if (Objects.nonNull(movieDetail)){
+                        insertMovie(movieDetail);
+                        String gid = movieDetail.getGid();
+                        String uc = movieDetail.getUc();
+                        movieMagnets = movieApiService.getMovieMagnets(movie.getId(), gid, uc);
+                        if (Objects.nonNull(movieMagnets)){
+                            insertMagnets(movieMagnets, gid);
+                        }
                     }
                 }
                 NewMovie newMovie = new NewMovie();

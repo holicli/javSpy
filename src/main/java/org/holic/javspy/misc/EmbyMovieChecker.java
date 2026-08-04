@@ -1,9 +1,14 @@
 package org.holic.javspy.misc;
 
+import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.holic.javspy.model.MediaItem;
 import org.holic.javspy.model.MovieItem;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.DataInput;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -172,6 +177,8 @@ public class EmbyMovieChecker {
             JSONObject jsonResponse = new JSONObject(response);
             JSONArray items = jsonResponse.getJSONArray("Items");
 
+
+            List<MediaItem> mediaItemList = JSON.parseArray(items.toString(), MediaItem.class);
             // 检查是否有匹配的影片
             for (int i = 0; i < items.length(); i++) {
                 JSONObject item = items.getJSONObject(i);

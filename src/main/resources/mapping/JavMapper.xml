@@ -47,11 +47,11 @@
     </select>
     <select id="getMovieDetail" resultType="org.holic.javspy.model.MovieDetail">
         select censored_id as id, movie_title as title, movie_pic_cover as img, release_date as date, movie_length as  videoLength,
-               Director as director, Studio as producer, Label, Series as series, Genre as genresstr, JAV_Idols as actors,gid,Similar as similarmoviesstr
+               Director as directorstr, Studio as producerstr,  Series as seriesstr, Genre as genresstr, JAV_Idols as actors,gid,Similar as similarmoviesstr
         from avbook_javbus_movie where censored_id = #{id}
     </select>
     <select id="getMovieMagnets" resultType="org.holic.javspy.model.Magnet">
-        select magnet_xt as link, gid, censored_id, magnet_name as title, magnet_type as size,
+        select magnet_xt as link, gid,  magnet_name as title, magnet_type as size,
                magnet_date as shareDate, have_hd as isHD, have_sub as hasSubtitle from avbook_javbus_magnet where gid = #{gid}
     </select>
 </mapper>

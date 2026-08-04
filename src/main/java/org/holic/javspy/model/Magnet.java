@@ -1,4 +1,5 @@
 package org.holic.javspy.model;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 

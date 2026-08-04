@@ -23,12 +23,13 @@ class JavspyApplicationTests {
     }
 
     @Test
-    void insertinfo2db(){
-        javService.getMovie();
-    }
-    @Test
-    void testNextPage(){
-        MovieResponse nextPageMovies = movieApiService.getNextPageMovies(2);
-        System.out.println(nextPageMovies);
+    void testNextPage() {
+        String osName = System.getProperty("os.name").toLowerCase();
+
+        if (osName.contains("win")) {
+            System.out.println("当前系统是 Windows");
+        } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
+            System.out.println("当前系统是 Linux/Unix");
+        }
     }
 }

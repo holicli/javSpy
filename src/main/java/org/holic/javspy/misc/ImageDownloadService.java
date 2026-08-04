@@ -22,6 +22,7 @@ public class ImageDownloadService {
 
     // 图片存储路径
     private static final String IMAGE_STORAGE_PATH = "../pic";
+    private static final String IMAGE_STORAGE_PATH_FNOS = "/vol1/1000/java/pic";
 
     // 图片访问的基础URL
     private static final String BASE_URL = "http://localhost:8084";
@@ -35,7 +36,8 @@ public class ImageDownloadService {
      */
     public String getImageUrl(String imageUrl, String fileName) throws IOException {
         // 确保目录存在
-        Path storageDir = Paths.get(IMAGE_STORAGE_PATH);
+
+        Path storageDir = Paths.get(getImgPath());
         if (!Files.exists(storageDir)) {
             Files.createDirectories(storageDir);
         }
@@ -54,7 +56,17 @@ public class ImageDownloadService {
         }
 
         // 下载图片
-        boolean downloadSuccess = downloadImageWithApache(imageUrl, localFilePath);
+        boolean downloadSuccess = false;
+
+        try {
+            downloadSuccess = downloadImageWithApache(imageUrl, localFilePath);
+        } catch (Exception e) {
+            // 捕获所有异常，包括超时
+            System.err.println("下载图片失败（可能是超时）: " + imageUrl);
+            e.printStackTrace();
+            downloadSuccess = false;
+            return null; // 或者返回一个默认图片地址
+        }
 
         if (downloadSuccess) {
             return generateAccessUrl(fileName);
@@ -206,7 +218,7 @@ public class ImageDownloadService {
      * 检查图片是否存在
      */
     public boolean checkImageExists(String fileName) {
-        Path filePath = Paths.get(IMAGE_STORAGE_PATH, fileName);
+        Path filePath = Paths.get(getImgPath(), fileName);
         return Files.exists(filePath);
     }
 
@@ -215,10 +227,22 @@ public class ImageDownloadService {
      */
     public boolean deleteImage(String fileName) {
         try {
-            Path filePath = Paths.get(IMAGE_STORAGE_PATH, fileName);
+            Path filePath = Paths.get(getImgPath(), fileName);
             return Files.deleteIfExists(filePath);
         } catch (IOException e) {
             return false;
+        }
+    }
+
+    public String getImgPath() {
+        String osName = System.getProperty("os.name").toLowerCase();
+
+        if (osName.contains("win")) {
+            return IMAGE_STORAGE_PATH;
+        } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
+            return IMAGE_STORAGE_PATH_FNOS;
+        }else {
+            return IMAGE_STORAGE_PATH_FNOS;
         }
     }
 }

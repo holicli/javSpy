@@ -18,6 +18,7 @@ package org.holic.javspy.controller;
 
 import org.holic.javspy.misc.ResultPage;
 import org.holic.javspy.model.NewMovie;
+import org.holic.javspy.model.NewMovieVo;
 import org.holic.javspy.service.JavService;
 import org.holic.javspy.service.MovieApiService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,16 +59,12 @@ public class PathVariableController {
         return "qbtUrl" + qbtUrl+",username"+username+",password"+password;
     }
 
-    @RequestMapping(value = "/javabeat/getfromdb", method = RequestMethod.GET)
-    @ResponseBody
-    public Integer getfromdb() {
-        return javService.getMovie();
-    }
+
 
     @RequestMapping(value = "/getNewMovie", method = RequestMethod.GET)
     @ResponseBody
-    public ResultPage<List<NewMovie>> getNewMovie(@RequestParam("page") Integer page, @RequestParam("size") String size) throws IOException {
-        return ResultPage.ok(javService.getNewMovie(page));
+    public ResultPage<List<NewMovie>> getNewMovie(NewMovieVo newMovieVo) throws IOException, InterruptedException {
+        return ResultPage.ok(javService.getNewMovie(newMovieVo.getPage(),newMovieVo.getKeyword()));
     }
 
     @RequestMapping("/startDownload")
