@@ -25,6 +25,9 @@ public class JavdbMovie implements Serializable {
     /** 封面图片地址 */
     private String coverUrl;
 
+    /** 本地封面图片地址 */
+    private String coverLocal;
+
     /** 发售日期 yyyy-MM-dd */
     private String releaseDate;
 

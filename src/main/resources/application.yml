@@ -14,7 +14,7 @@ spring:
         mode: HTML5
 
     redis:
-        host: 127.0.0.1
+        host: holicli.online:6380
         password:
         lettuce:
             pool:
@@ -23,7 +23,7 @@ spring:
     #   ?????
     datasource:
         driver-class-name: com.mysql.cj.jdbc.Driver
-        url: jdbc:mysql://150.158.150.218:3306/javspy
+        url: jdbc:mysql://holicli.online:3307/javspy
         username: root
         password: Pass1256
         hikari:
@@ -81,6 +81,8 @@ conf:
         # 登录 cookie（浏览器登录 javdb 后复制，如 remember=xxx; ），
         # 不配置时只能抓搜索页/部分详情，磁力链接通常需要 cookie
         cookie: "eyJfcmFpbHMiOnsibWVzc2FnZSI6IklubE9TSHBHUjI4MlEyTnRSbFpJUzNaZlJWZ3hJZz09IiwiZXhwIjoiMjAyNi0wOC0xMVQwODo0MDoyNS4wMDBaIiwicHVyIjoiY29va2llLnJlbWVtYmVyX21lX3Rva2VuIn19--6501e847aabdf4054d90dd497f612f80e7b7d70d;"
+        # 代理总开关：false 时即使配置了 host/port 也不会走代理
+        proxy-enabled: false
         # SOCKS5 代理（javdb 被墙时通过本地代理访问）
         proxy-host: 127.0.0.1
         proxy-port: 7890

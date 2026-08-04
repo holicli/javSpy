@@ -2,6 +2,7 @@ package org.holic.javspy.javdb.controller;
 
 import com.github.pagehelper.PageInfo;
 import org.holic.javspy.javdb.model.JavdbMovie;
+import org.holic.javspy.javdb.model.JavdbMovieVo;
 import org.holic.javspy.javdb.model.JavdbScrapeResult;
 import org.holic.javspy.javdb.model.JavdbVideoItem;
 import org.holic.javspy.javdb.service.JavdbScraperService;
@@ -124,6 +125,24 @@ public class JavdbController {
                     .message("首页共 " + items.size() + " 部影片").build();
         } catch (Exception e) {
             return WebResult.<List<JavdbVideoItem>>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
+
+    /**
+     * 首页影片表格数据：库中已存在直接读库，不存在则刮削入库。
+     * 示例：GET /javdb/home/movies?page=1
+     */
+    @GetMapping("/home/movies")
+    public WebResult<List<JavdbMovieVo>> homeMoviesSync(
+            @RequestParam(value = "page", defaultValue = "1") int page) {
+        try {
+            List<JavdbMovieVo> movies = scraperService.homeMoviesWithSync(page);
+            return WebResult.<List<JavdbMovieVo>>builder()
+                    .success(true).data(movies)
+                    .message("第 " + page + " 页共处理 " + movies.size() + " 部影片").build();
+        } catch (Exception e) {
+            return WebResult.<List<JavdbMovieVo>>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }

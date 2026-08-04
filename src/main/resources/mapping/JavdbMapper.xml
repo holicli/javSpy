@@ -3,7 +3,7 @@
 <mapper namespace="org.holic.javspy.javdb.mapper.JavdbMapper">
 
     <sql id="allColumns">
-        id, code, title, cover_url, release_date, duration, director, studio,
+        id, code, title, cover_url, cover_local, release_date, duration, director, studio,
         publisher, series, actors, genres, description, detail_url, raw_html,
         created_at, updated_at
     </sql>
@@ -26,17 +26,18 @@
 
     <insert id="insertMovie" parameterType="org.holic.javspy.javdb.model.JavdbMovie">
         INSERT INTO javdb_movie (
-            code, title, cover_url, release_date, duration, director, studio,
+            code, title, cover_url, cover_local, release_date, duration, director, studio,
             publisher, series, actors, genres, description, detail_url, raw_html,
             created_at, updated_at
         ) VALUES (
-            #{code}, #{title}, #{coverUrl}, #{releaseDate}, #{duration}, #{director},
+            #{code}, #{title}, #{coverUrl}, #{coverLocal}, #{releaseDate}, #{duration}, #{director},
             #{studio}, #{publisher}, #{series}, #{actors}, #{genres}, #{description},
             #{detailUrl}, #{rawHtml}, NOW(), NOW()
         )
         ON DUPLICATE KEY UPDATE
             title          = VALUES(title),
             cover_url      = VALUES(cover_url),
+            cover_local    = VALUES(cover_local),
             release_date   = VALUES(release_date),
             duration       = VALUES(duration),
             director       = VALUES(director),
@@ -49,6 +50,13 @@
             detail_url     = VALUES(detail_url),
             updated_at     = NOW()
     </insert>
+
+    <update id="updateCoverLocal">
+        UPDATE javdb_movie
+        SET cover_local = #{coverLocal},
+            updated_at  = NOW()
+        WHERE code = #{code}
+    </update>
 
     <insert id="insertMagnets">
         INSERT IGNORE INTO javdb_magnet (
@@ -63,6 +71,18 @@
             )
         </foreach>
     </insert>
+
+    <select id="findMagnetLinksByDetailId" resultType="java.lang.String">
+        SELECT magnet
+        FROM javdb_magnet
+        WHERE detail_id = #{detailId}
+    </select>
+
+    <select id="countMagnetsByCode" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM javdb_magnet
+        WHERE code = #{code}
+    </select>
 
     <select id="searchMovies" resultType="org.holic.javspy.javdb.model.JavdbMovie">
         SELECT <include refid="allColumns"/>

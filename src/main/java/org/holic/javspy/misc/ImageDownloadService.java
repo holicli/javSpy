@@ -35,6 +35,13 @@ public class ImageDownloadService {
      * 获取图片URL（检查存在性，不存在则下载）
      */
     public String getImageUrl(String imageUrl, String fileName) throws IOException {
+        return getImageUrl(imageUrl, fileName, null);
+    }
+
+    /**
+     * 获取图片URL（检查存在性，不存在则下载）；referer 非空时随请求发送。
+     */
+    public String getImageUrl(String imageUrl, String fileName, String referer) throws IOException {
         // 确保目录存在
 
         Path storageDir = Paths.get(getImgPath());
@@ -59,7 +66,7 @@ public class ImageDownloadService {
         boolean downloadSuccess = false;
 
         try {
-            downloadSuccess = downloadImageWithApache(imageUrl, localFilePath);
+            downloadSuccess = downloadImageWithApache(imageUrl, localFilePath, referer);
         } catch (Exception e) {
             // 捕获所有异常，包括超时
             System.err.println("下载图片失败（可能是超时）: " + imageUrl);
@@ -78,7 +85,7 @@ public class ImageDownloadService {
     /**
      * 使用Apache HttpClient下载图片
      */
-    private boolean downloadImageWithApache(String imageUrl, Path savePath) throws IOException {
+    private boolean downloadImageWithApache(String imageUrl, Path savePath, String referer) throws IOException {
         // 创建HttpClient
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
 
@@ -93,6 +100,9 @@ public class ImageDownloadService {
             httpGet.setConfig(requestConfig);
             httpGet.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             httpGet.setHeader("Accept", "image/webp,image/apng,image/*,*/*;q=0.8");
+            if (referer != null && !referer.trim().isEmpty()) {
+                httpGet.setHeader("Referer", referer);
+            }
 
             // 执行请求
             try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
@@ -135,6 +145,13 @@ public class ImageDownloadService {
      * 从URL生成文件名
      */
     private String generateFileName(String imageUrl) {
+        return extractFileName(imageUrl);
+    }
+
+    /**
+     * 从 URL 提取文件名（解码、去参数、清理非法字符），供外部复用。
+     */
+    public static String extractFileName(String imageUrl) {
         try {
             // 解码URL
             String decodedUrl = URLDecoder.decode(imageUrl, "UTF-8");
@@ -170,7 +187,7 @@ public class ImageDownloadService {
     /**
      * 从URL获取文件扩展名
      */
-    private String getFileExtensionFromUrl(String imageUrl) {
+    private static String getFileExtensionFromUrl(String imageUrl) {
         String urlLower = imageUrl.toLowerCase();
         if (urlLower.contains(".jpg") || urlLower.contains(".jpeg")) {
             return ".jpg";

@@ -6,9 +6,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.holic.javspy.javdb.client.JavdbApiClient;
 import org.holic.javspy.javdb.mapper.JavdbMapper;
+import org.holic.javspy.javdb.model.JavdbMagnet;
 import org.holic.javspy.javdb.model.JavdbMovie;
+import org.holic.javspy.javdb.model.JavdbMovieVo;
 import org.holic.javspy.javdb.model.JavdbScrapeResult;
 import org.holic.javspy.javdb.model.JavdbVideoItem;
+import org.holic.javspy.misc.ImageDownloadService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +32,13 @@ public class JavdbScraperService {
 
     private final JavdbApiClient apiClient;
     private final JavdbMapper javdbMapper;
+    private final ImageDownloadService imageDownloadService;
 
-    public JavdbScraperService(JavdbApiClient apiClient, JavdbMapper javdbMapper) {
+    public JavdbScraperService(JavdbApiClient apiClient, JavdbMapper javdbMapper,
+                               ImageDownloadService imageDownloadService) {
         this.apiClient = apiClient;
         this.javdbMapper = javdbMapper;
+        this.imageDownloadService = imageDownloadService;
     }
 
     /**
@@ -169,8 +175,38 @@ public class JavdbScraperService {
         javdbMapper.insertMovie(movie);
 
         if (result.getMagnets() != null && !result.getMagnets().isEmpty()) {
-            javdbMapper.insertMagnets(result.getMagnets());
+            List<JavdbMagnet> magnetsToInsert = filterNewMagnets(result.getMagnets());
+            if (!magnetsToInsert.isEmpty()) {
+                javdbMapper.insertMagnets(magnetsToInsert);
+            }
         }
+    }
+
+    /**
+     * 过滤掉库里已存在的磁力链接，避免重复抓取同一页时重复入库。
+     */
+    private List<JavdbMagnet> filterNewMagnets(List<JavdbMagnet> magnets) {
+        List<JavdbMagnet> result = new ArrayList<>();
+        if (magnets == null || magnets.isEmpty()) {
+            return result;
+        }
+        String detailId = magnets.get(0).getDetailId();
+        Set<String> existing = new HashSet<>();
+        if (StringUtils.isNotBlank(detailId)) {
+            existing.addAll(javdbMapper.findMagnetLinksByDetailId(detailId));
+        }
+        Set<String> seen = new HashSet<>();
+        for (JavdbMagnet magnet : magnets) {
+            if (magnet == null || StringUtils.isBlank(magnet.getMagnet())) {
+                continue;
+            }
+            String link = magnet.getMagnet();
+            if (existing.contains(link) || !seen.add(link)) {
+                continue;
+            }
+            result.add(magnet);
+        }
+        return result;
     }
 
     /**
@@ -190,6 +226,87 @@ public class JavdbScraperService {
             log.error("javdb 首页抓取失败", e);
             throw new RuntimeException("javdb 首页抓取失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 按 javdb 首页分页同步影片：库中已存在时直接读库，
+     * 不存在时刮削详情并入库，最后返回列表展示数据。
+     */
+    public List<JavdbMovieVo> homeMoviesWithSync(int page) throws Exception {
+        List<JavdbMovieVo> result = new ArrayList<>();
+        List<JavdbVideoItem> items = apiClient.pageMovies(page);
+        log.info("javdb 首页第 {} 页抓取到 {} 部影片", page, items.size());
+        for (JavdbVideoItem item : items) {
+            if (item == null || StringUtils.isBlank(item.getCode())) {
+                continue;
+            }
+            try {
+                JavdbMovie movie = javdbMapper.findByCode(item.getCode());
+                String source = "DB";
+                if (movie == null) {
+                    JavdbScrapeResult scrapeResult = apiClient.scrapeByUrl(item.getUrl());
+                    if (scrapeResult == null || scrapeResult.getMovie() == null
+                            || StringUtils.isBlank(scrapeResult.getMovie().getCode())) {
+                        log.warn("javdb 首页详情解析失败，跳过 code={}", item.getCode());
+                        continue;
+                    }
+                    saveResult(scrapeResult);
+                    movie = scrapeResult.getMovie();
+                    source = "JAVDB";
+                }
+                result.add(toVo(movie, resolveLocalCover(movie, item.getCover()), source));
+            } catch (Exception e) {
+                log.error("javdb 首页同步失败, code={}, url={}", item.getCode(), item.getUrl(), e);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 封面优先用本地：数据库已有本地地址且文件存在时直接返回，
+     * 否则从远程下载到本地并回写 cover_local。
+     */
+    private String resolveLocalCover(JavdbMovie movie, String remoteCover) {
+        if (StringUtils.isNotBlank(movie.getCoverLocal())) {
+            String fileName = ImageDownloadService.extractFileName(movie.getCoverLocal());
+            if (StringUtils.isNotBlank(fileName) && imageDownloadService.checkImageExists(fileName)) {
+                return movie.getCoverLocal();
+            }
+        }
+        String remote = StringUtils.defaultIfBlank(remoteCover, movie.getCoverUrl());
+        if (StringUtils.isBlank(remote)) {
+            return movie.getCoverLocal();
+        }
+        try {
+            String fileName = ImageDownloadService.extractFileName(remote);
+            String localUrl = imageDownloadService.getImageUrl(remote, fileName, apiClient.getBaseUrl() + "/");
+            if (StringUtils.isNotBlank(localUrl)) {
+                movie.setCoverLocal(localUrl);
+                javdbMapper.updateCoverLocal(movie.getCode(), localUrl);
+                return localUrl;
+            }
+        } catch (Exception e) {
+            log.warn("javdb 封面下载失败, code={}, url={}", movie.getCode(), remote, e);
+        }
+        return remote;
+    }
+
+    private JavdbMovieVo toVo(JavdbMovie movie, String cover, String source) {
+        JavdbMovieVo vo = new JavdbMovieVo();
+        vo.setCode(movie.getCode());
+        vo.setTitle(movie.getTitle());
+        vo.setCoverUrl(cover);
+        vo.setReleaseDate(movie.getReleaseDate());
+        vo.setDuration(movie.getDuration());
+        vo.setDirector(movie.getDirector());
+        vo.setStudio(movie.getStudio());
+        vo.setSeries(movie.getSeries());
+        vo.setActors(movie.getActors());
+        vo.setGenres(movie.getGenres());
+        vo.setDetailUrl(movie.getDetailUrl());
+        vo.setMagnetCount(javdbMapper.countMagnetsByCode(movie.getCode()));
+        vo.setSource(source);
+        return vo;
     }
 
     /**

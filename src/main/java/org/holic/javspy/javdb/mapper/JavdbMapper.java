@@ -22,8 +22,17 @@ public interface JavdbMapper {
     /** 插入影片；已存在（番号冲突）时更新可更新字段。 */
     int insertMovie(JavdbMovie movie);
 
-    /** 批量插入磁力链接（重复行自动忽略）。 */
+    /** 更新影片本地封面地址。 */
+    int updateCoverLocal(@Param("code") String code, @Param("coverLocal") String coverLocal);
+
+    /** 批量插入磁力链接；已存在的磁力链接由 service 层过滤。 */
     int insertMagnets(@Param("list") List<JavdbMagnet> magnets);
+
+    /** 查询某部影片已入库的磁力链接。 */
+    List<String> findMagnetLinksByDetailId(@Param("detailId") String detailId);
+
+    /** 统计某部影片的磁力链接数量。 */
+    int countMagnetsByCode(@Param("code") String code);
 
     /** 按条件分页查询影片列表。 */
     List<JavdbMovie> searchMovies(@Param("code") String code,

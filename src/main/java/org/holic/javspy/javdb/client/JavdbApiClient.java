@@ -56,6 +56,10 @@ public class JavdbApiClient {
     @Value("${conf.javdb.proxy-port:0}")
     private int proxyPort;
 
+    /** 代理总开关：false 时即使配置了 host/port 也不走代理 */
+    @Value("${conf.javdb.proxy-enabled:true}")
+    private boolean proxyEnabled;
+
     /** 请求超时（毫秒） */
     @Value("${conf.javdb.timeout-ms:20000}")
     private long timeoutMs;
@@ -87,13 +91,19 @@ public class JavdbApiClient {
                 .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                 .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                 .followRedirects(true);
-        if (StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
+        if (proxyEnabled && StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
             builder.proxy(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(proxyHost, proxyPort)));
             log.info("javdb client uses SOCKS5 proxy {}:{}", proxyHost, proxyPort);
+        } else if (!proxyEnabled) {
+            log.info("javdb proxy is disabled by config");
         }
         this.httpClient = builder.build();
         log.info("javdb client initialized, baseUrl={}, cookieConfigured={}",
                 baseUrl, StringUtils.isNotBlank(cookie));
+    }
+
+    public String getBaseUrl() {
+        return baseUrl;
     }
 
     // ==================== 对外方法 ====================
@@ -332,6 +342,52 @@ public class JavdbApiClient {
     }
 
     /**
+     * 解析 /magnet/xxx 占位链接：请求该地址但不跟随重定向，
+     * 从 302 Location（或响应体）中取真实 magnet URI，并做内存缓存。
+     */
+    private String resolveMagnetLink(String magnetPageUrl) {
+        if (StringUtils.isBlank(magnetPageUrl)) {
+            return null;
+        }
+        String cached = magnetUrlCache.get(magnetPageUrl);
+        if (cached != null) {
+            return cached;
+        }
+        String resolved = magnetPageUrl;
+        try {
+            throttle();
+            Request.Builder builder = new Request.Builder()
+                    .url(magnetPageUrl)
+                    .header("User-Agent", UA)
+                    .header("Accept", "*/*")
+                    .header("Referer", baseUrl + "/")
+                    .header("Cookie", buildCookieHeader());
+            OkHttpClient noRedirectClient = httpClient.newBuilder()
+                    .followRedirects(false)
+                    .followSslRedirects(false)
+                    .build();
+            try (Response response = noRedirectClient.newCall(builder.build()).execute()) {
+                String location = response.header("Location");
+                if (StringUtils.isNotBlank(location)) {
+                    resolved = location;
+                } else if (response.body() != null) {
+                    String text = response.body().string().trim();
+                    if (text.startsWith("magnet:")) {
+                        resolved = text;
+                    }
+                }
+            }
+            if (resolved.startsWith("/")) {
+                resolved = toAbsolute(resolved);
+            }
+        } catch (Exception e) {
+            log.warn("javdb magnet resolve failed, url={}", magnetPageUrl, e);
+        }
+        magnetUrlCache.put(magnetPageUrl, resolved);
+        return resolved;
+    }
+
+    /**
      * 解析磁力列表 HTML。
      */
     public List<JavdbMagnet> parseMagnets(String html, String code, String detailId) {
@@ -339,19 +395,32 @@ public class JavdbApiClient {
         if (StringUtils.isBlank(html)) {
             return magnets;
         }
+        // javdb 的磁力行有时直接给 magnet: 链接，有时给 /magnet/xxx 占位地址
         Pattern p = Pattern.compile(
-                "<a[^>]*href=\"([^\"]*magnet:?[^\"]*|/magnet/[^\"]+)\"[^>]*>([\\s\\S]*?)</a>");
+                "<a([^>]*)href=\"([^\"]*magnet:?[^\"]*|/magnet/[^\"]+)\"([^>]*)>([\\s\\S]*?)</a>");
         Matcher m = p.matcher(html);
         while (m.find()) {
-            String link = m.group(1);
-            String name = cleanText(m.group(2));
-            String row = m.group(2);
+            String attrs = m.group(1) + " " + m.group(3);
+            String link = m.group(2);
+            String name = cleanText(m.group(4));
+            String row = m.group(4);
             if (StringUtils.isBlank(link) && StringUtils.isBlank(name)) {
                 continue;
             }
-            // javdb 用 /magnet/xxx 路径占位，真实磁力地址走磁力页；这里先按 href 原样记录
-            if (link.startsWith("/magnet/")) {
-                link = toAbsolute(link);
+            // 优先取 data-clipboard-text / data-magnet 里的真实磁力地址
+            String dataLink = firstNonBlank(
+                    extractDataAttribute(attrs, "data-clipboard-text"),
+                    extractDataAttribute(attrs, "data-magnet"));
+            if (StringUtils.isNotBlank(dataLink)) {
+                link = cleanText(dataLink);
+            } else if (link.startsWith("/magnet/")) {
+                link = resolveMagnetLink(toAbsolute(link));
+            } else {
+                link = cleanText(link);
+            }
+            // 解析不到真实 magnet 链接时跳过，避免把 javdb 页面地址当成磁力入库
+            if (StringUtils.isBlank(link) || !link.startsWith("magnet:")) {
+                continue;
             }
             JavdbMagnet magnet = new JavdbMagnet();
             magnet.setCode(code);
@@ -415,12 +484,7 @@ public class JavdbApiClient {
                 .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
                 .header("Referer", baseUrl + "/");
-        // 组装 Cookie：always 带上 over18=1（成人确认），用户 cookie 追加在后面
-        StringBuilder cookieHeader = new StringBuilder("over18=1");
-        if (StringUtils.isNotBlank(cookie)) {
-            cookieHeader.append("; ").append(cookie);
-        }
-        builder.header("Cookie", cookieHeader.toString());
+        builder.header("Cookie", buildCookieHeader());
         try (Response response = httpClient.newCall(builder.build()).execute()) {
             if (!response.isSuccessful()) {
                 log.warn("javdb request failed, url={}, code={}", url, response.code());
@@ -485,6 +549,37 @@ public class JavdbApiClient {
             return null;
         }
         return text.substring(s, e).trim();
+    }
+
+    /** 组装 Cookie：always 带上 over18=1（成人确认），用户 cookie 追加在后面。 */
+    private String buildCookieHeader() {
+        StringBuilder cookieHeader = new StringBuilder("over18=1");
+        if (StringUtils.isNotBlank(cookie)) {
+            cookieHeader.append("; ").append(cookie);
+        }
+        return cookieHeader.toString();
+    }
+
+    /** 返回第一个非空字符串；全部为空时返回 null。 */
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** 提取某个 data-* 属性的值，兼容单双引号。 */
+    private String extractDataAttribute(String attrs, String attrName) {
+        String value = extractAttr(attrs, attrName + "=\"", "\"");
+        if (StringUtils.isBlank(value)) {
+            value = extractAttr(attrs, attrName + "='", "'");
+        }
+        return value;
     }
 
     /** 清洗 HTML 实体、标签、空白。 */

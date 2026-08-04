@@ -2,6 +2,7 @@
 -- javdb 刮削功能建表脚本（手动执行）
 -- 数据库：与项目 datasource 同一个库（默认 avbook）
 -- 执行方式：mysql -uroot -p avbook < javdb_ddl.sql
+-- 老库升级：先执行 javdb_cover_local_alter.sql 补充新字段，再启动新版应用
 -- 说明：这两张表是新增的独立表，不影响已有业务表。
 -- ============================================================
 
@@ -11,6 +12,7 @@ CREATE TABLE IF NOT EXISTS javdb_movie (
     code         VARCHAR(64)     NOT NULL                COMMENT '番号，如 SSIS-123',
     title        VARCHAR(512)    DEFAULT NULL            COMMENT '标题',
     cover_url    VARCHAR(1024)   DEFAULT NULL            COMMENT '封面图片地址',
+    cover_local  VARCHAR(1024)   DEFAULT NULL            COMMENT '本地封面图片地址',
     release_date VARCHAR(32)     DEFAULT NULL            COMMENT '发售日期 yyyy-MM-dd',
     duration     INT             DEFAULT NULL            COMMENT '时长（分钟）',
     director     VARCHAR(128)    DEFAULT NULL            COMMENT '导演',
@@ -24,6 +26,7 @@ CREATE TABLE IF NOT EXISTS javdb_movie (
     raw_html     MEDIUMTEXT      DEFAULT NULL            COMMENT '详情页原始 HTML（排查用）',
     created_at   DATETIME        DEFAULT NULL            COMMENT '入库时间',
     updated_at   DATETIME        DEFAULT NULL            COMMENT '更新时间',
+    cover_local  VARCHAR(1024)   DEFAULT NULL            COMMENT '本地封面图片地址' ,
     PRIMARY KEY (id),
     UNIQUE KEY uk_javdb_movie_code (code),
     KEY idx_javdb_movie_release_date (release_date),
