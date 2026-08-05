@@ -25,7 +25,7 @@ spring:
         driver-class-name: com.mysql.cj.jdbc.Driver
         url: jdbc:mysql://holicli.online:3307/javspy
         username: root
-        password: Pass1256
+        password: ENC(p4qsgbG1KRfGueoDXeTxORFNUH4RFFMRaOpOk1VhnZZiJayF7qhv3CTspbQJ7n+y)
         hikari:
             maximum-pool-size: 500
             minimum-idle: 5

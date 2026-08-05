@@ -97,6 +97,11 @@
             <version>8.0.33</version>  <!-- 推荐使用较新的 8.0.x 版本 -->
         </dependency>
         <dependency>
+            <groupId>com.github.ulisesbocchio</groupId>
+            <artifactId>jasypt-spring-boot-starter</artifactId>
+            <version>3.0.5</version> <!-- 建议使用最新稳定版本 -->
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

@@ -4,6 +4,7 @@ import org.holic.javspy.model.JavTableConstants;
 import org.holic.javspy.model.MovieResponse;
 import org.holic.javspy.service.JavService;
 import org.holic.javspy.service.MovieApiService;
+import org.jasypt.encryption.StringEncryptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +18,8 @@ class JavspyApplicationTests {
 
     @Autowired
     private MovieApiService movieApiService;
+    @Autowired
+    private StringEncryptor encryptor;
 
     @Test
     void contextLoads() {
