@@ -48,6 +48,9 @@ public class JavdbMovieVo implements Serializable {
     /** 磁力链接数量 */
     private Integer magnetCount;
 
+    /** 影片是否已存在于 Emby */
+    private Boolean embyExists;
+
     /** 数据来源：DB 表示来自数据库，JAVDB 表示本次新抓取 */
     private String source;
 }

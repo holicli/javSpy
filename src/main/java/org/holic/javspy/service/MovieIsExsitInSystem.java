@@ -61,12 +61,26 @@ public class MovieIsExsitInSystem {
         return qBitList;
     }
     public List<String> getEmbyList() {
-        List<String> EmbyList = (List<String>) redisTemplate.opsForValue().get("EmbyList");
-        if (Objects.isNull(EmbyList)){
-            EmbyList = embyNameList();
-            redisTemplate.opsForValue().set("EmbyList",EmbyList,1L, TimeUnit.HOURS);
+        List<String> embyList = (List<String>) redisTemplate.opsForValue().get("EmbyList");
+        if (Objects.isNull(embyList) || embyList.isEmpty()) {
+            embyList = embyNameList();
+            if (embyList != null && !embyList.isEmpty()) {
+                redisTemplate.opsForValue().set("EmbyList", embyList, 1L, TimeUnit.HOURS);
+            }
         }
-        return EmbyList;
+        return embyList;
+    }
+
+    /** 每次打开首页时尝试从 Emby 拉取影片名列表，能获取到内容就刷新 Redis 缓存。 */
+    public void refreshEmbyListIfAvailable() {
+        try {
+            List<String> embyList = embyNameList();
+            if (embyList != null && !embyList.isEmpty()) {
+                redisTemplate.opsForValue().set("EmbyList", embyList, 1L, TimeUnit.HOURS);
+            }
+        } catch (Exception e) {
+            System.err.println("刷新 Emby 影片名列表失败: " + e.getMessage());
+        }
     }
     public Boolean isInQbit(String name){
         List<String> list = getqBitList();
@@ -79,6 +93,6 @@ public class MovieIsExsitInSystem {
     }
     public Boolean isInEmby(String name){
         List<String> embyList = getEmbyList();
-        return embyList.contains(name);
+        return embyList != null && embyList.contains(name);
     }
 }

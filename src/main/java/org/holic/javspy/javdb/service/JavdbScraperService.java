@@ -7,21 +7,31 @@ import org.apache.commons.lang3.StringUtils;
 import org.holic.javspy.javdb.client.JavdbApiClient;
 import org.holic.javspy.javdb.mapper.JavdbMapper;
 import org.holic.javspy.javdb.model.JavdbMagnet;
+import org.holic.javspy.javdb.model.JavdbMagnetExport;
 import org.holic.javspy.javdb.model.JavdbMovie;
 import org.holic.javspy.javdb.model.JavdbMovieVo;
 import org.holic.javspy.javdb.model.JavdbScrapeResult;
 import org.holic.javspy.javdb.model.JavdbVideoItem;
 import org.holic.javspy.misc.ImageDownloadService;
+import org.holic.javspy.service.MovieIsExsitInSystem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * javdb 刮削业务：抓取 javdb.com 并把影片/磁力信息写入数据库。
@@ -33,12 +43,232 @@ public class JavdbScraperService {
     private final JavdbApiClient apiClient;
     private final JavdbMapper javdbMapper;
     private final ImageDownloadService imageDownloadService;
+    private final MovieIsExsitInSystem movieIsExsitInSystem;
 
     public JavdbScraperService(JavdbApiClient apiClient, JavdbMapper javdbMapper,
-                               ImageDownloadService imageDownloadService) {
+                               ImageDownloadService imageDownloadService,
+                               MovieIsExsitInSystem movieIsExsitInSystem) {
         this.apiClient = apiClient;
         this.javdbMapper = javdbMapper;
         this.imageDownloadService = imageDownloadService;
+        this.movieIsExsitInSystem = movieIsExsitInSystem;
+    }
+
+    /** 近 7 天内发布的磁链视为新磁链。 */
+    private static final int RECENT_MAGNET_DAYS = 7;
+    /** 7 天内有多个新磁链时优先选择的最小大小：1.5GB。 */
+    private static final long MIN_RECOMMENDED_SIZE_BYTES = (long) (1.5 * 1024 * 1024 * 1024);
+
+    /**
+     * 将选中影片的磁链按规则写入 javdb_magnet_export 表；
+     * 影片没有磁链时写入一行无磁链记录（status=NO_MAGNET）。
+     * 每次保存会先清空导出表，再写入本次选中的结果。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> exportSelectedMagnets(List<String> codes) {
+        List<String> normalizedCodes = new ArrayList<>();
+        Set<String> seenCodes = new HashSet<>();
+        if (codes != null) {
+            for (String code : codes) {
+                if (StringUtils.isBlank(code)) {
+                    continue;
+                }
+                String c = code.trim().toUpperCase();
+                if (seenCodes.add(c)) {
+                    normalizedCodes.add(c);
+                }
+            }
+        }
+        if (normalizedCodes.isEmpty()) {
+            throw new IllegalArgumentException("请先选择影片");
+        }
+
+        Map<String, List<JavdbMagnet>> magnetsByCode = new HashMap<>();
+        for (JavdbMagnet magnet : javdbMapper.findMagnetsByCodes(normalizedCodes)) {
+            if (magnet == null || StringUtils.isBlank(magnet.getCode())
+                    || StringUtils.isBlank(magnet.getMagnet())) {
+                continue;
+            }
+            magnetsByCode.computeIfAbsent(magnet.getCode(), k -> new ArrayList<>()).add(magnet);
+        }
+
+        List<JavdbMagnetExport> exportRows = new ArrayList<>();
+        List<Map<String, Object>> items = new ArrayList<>();
+        int magnetCount = 0;
+        int noMagnetCount = 0;
+        for (String code : normalizedCodes) {
+            List<JavdbMagnet> magnets = magnetsByCode.getOrDefault(code, Collections.emptyList());
+            JavdbMagnet selected = selectBestMagnet(magnets);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("code", code);
+
+            JavdbMagnetExport row = new JavdbMagnetExport();
+            row.setCode(code);
+            row.setCreatedAt(new Date());
+            if (selected == null) {
+                item.put("status", "NO_MAGNET");
+                row.setStatus("NO_MAGNET");
+                noMagnetCount++;
+            } else {
+                item.put("status", "OK");
+                item.put("magnet", selected.getMagnet());
+                item.put("name", selected.getName());
+                item.put("sizeText", selected.getSizeText());
+                item.put("shareDate", selected.getShareDate());
+                row.setStatus("OK");
+                row.setMagnet(selected.getMagnet());
+                row.setName(selected.getName());
+                row.setSizeText(selected.getSizeText());
+                row.setShareDate(selected.getShareDate());
+                magnetCount++;
+            }
+            exportRows.add(row);
+            items.add(item);
+        }
+
+        javdbMapper.clearMagnetExports();
+        if (!exportRows.isEmpty()) {
+            javdbMapper.insertMagnetExports(exportRows);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("table", "javdb_magnet_export");
+        result.put("total", normalizedCodes.size());
+        result.put("magnetCount", magnetCount);
+        result.put("noMagnetCount", noMagnetCount);
+        result.put("items", items);
+        return result;
+    }
+
+    /** 按时间优先规则选择一条磁链。 */
+    private JavdbMagnet selectBestMagnet(List<JavdbMagnet> magnets) {
+        if (magnets == null || magnets.isEmpty()) {
+            return null;
+        }
+        List<JavdbMagnet> sorted = new ArrayList<>(magnets);
+        sorted.sort((a, b) -> {
+            LocalDate da = magnetDate(a);
+            LocalDate db = magnetDate(b);
+            if (da != null && db != null) {
+                int c = db.compareTo(da);
+                if (c != 0) {
+                    return c;
+                }
+            } else if (da != null) {
+                return -1;
+            } else if (db != null) {
+                return 1;
+            }
+            return Long.compare(idOf(b), idOf(a));
+        });
+
+        LocalDate today = LocalDate.now();
+        LocalDate threshold = today.minusDays(RECENT_MAGNET_DAYS);
+        JavdbMagnet newest = sorted.get(0);
+        LocalDate newestDate = magnetDate(newest);
+        if (newestDate == null || newestDate.isBefore(threshold)) {
+            return newest;
+        }
+
+        List<JavdbMagnet> recent = new ArrayList<>();
+        for (JavdbMagnet magnet : sorted) {
+            LocalDate date = magnetDate(magnet);
+            if (date != null && !date.isBefore(threshold)) {
+                recent.add(magnet);
+            } else {
+                break;
+            }
+        }
+        if (recent.size() <= 1) {
+            return recent.isEmpty() ? newest : recent.get(0);
+        }
+
+        JavdbMagnet best = smallestMagnetAtLeast(recent, MIN_RECOMMENDED_SIZE_BYTES);
+        if (best != null) {
+            return best;
+        }
+        JavdbMagnet fallback = smallestMagnetAtLeast(recent, 0L);
+        return fallback != null ? fallback : newest;
+    }
+
+    /** 从列表中选出大小 >= minSizeBytes 的最小一条。 */
+    private JavdbMagnet smallestMagnetAtLeast(List<JavdbMagnet> magnets, long minSizeBytes) {
+        JavdbMagnet best = null;
+        for (JavdbMagnet magnet : magnets) {
+            Long size = magnetSizeBytes(magnet);
+            if (size == null || size < minSizeBytes) {
+                continue;
+            }
+            if (best == null || size < magnetSizeBytes(best)) {
+                best = magnet;
+            }
+        }
+        return best;
+    }
+
+    private LocalDate magnetDate(JavdbMagnet magnet) {
+        if (magnet == null) {
+            return null;
+        }
+        if (StringUtils.isNotBlank(magnet.getShareDate())) {
+            try {
+                return LocalDate.parse(magnet.getShareDate().trim(), DateTimeFormatter.ISO_LOCAL_DATE);
+            } catch (DateTimeParseException ignored) {
+                // 继续尝试用入库时间兜底
+            }
+        }
+        if (magnet.getCreatedAt() != null) {
+            return magnet.getCreatedAt().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+        }
+        return null;
+    }
+
+    private Long magnetSizeBytes(JavdbMagnet magnet) {
+        if (magnet == null) {
+            return null;
+        }
+        if (magnet.getSizeBytes() != null) {
+            return magnet.getSizeBytes();
+        }
+        return parseSizeBytes(magnet.getSizeText());
+    }
+
+    private Long parseSizeBytes(String sizeText) {
+        if (StringUtils.isBlank(sizeText)) {
+            return null;
+        }
+        try {
+            Matcher m = Pattern.compile("([\\d.]+)\\s*([A-Za-z]+)").matcher(sizeText.trim());
+            if (!m.find()) {
+                return null;
+            }
+            double value = Double.parseDouble(m.group(1));
+            String unit = m.group(2).toUpperCase();
+            long factor;
+            switch (unit) {
+                case "TB":
+                    factor = 1024L * 1024L * 1024L * 1024L;
+                    break;
+                case "GB":
+                    factor = 1024L * 1024L * 1024L;
+                    break;
+                case "MB":
+                    factor = 1024L * 1024L;
+                    break;
+                case "KB":
+                    factor = 1024L;
+                    break;
+                default:
+                    factor = 1L;
+            }
+            return (long) (value * factor);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private long idOf(JavdbMagnet magnet) {
+        return magnet == null || magnet.getId() == null ? 0L : magnet.getId();
     }
 
     /**
@@ -233,9 +463,20 @@ public class JavdbScraperService {
      * 不存在时刮削详情并入库，最后返回列表展示数据。
      */
     public List<JavdbMovieVo> homeMoviesWithSync(int page) throws Exception {
+        if (page == 1) {
+            movieIsExsitInSystem.refreshEmbyListIfAvailable();
+        }
         List<JavdbMovieVo> result = new ArrayList<>();
         List<JavdbVideoItem> items = apiClient.pageMovies(page);
         log.info("javdb 首页第 {} 页抓取到 {} 部影片", page, items.size());
+        if (!items.isEmpty() && StringUtils.isNotBlank(items.get(0).getCode())) {
+            JavdbMovie first = javdbMapper.findByCode(items.get(0).getCode());
+            if (first != null) {
+                log.info("javdb 首页第 {} 页第一部影片已入库，直接读库展示整页, code={}",
+                        page, items.get(0).getCode());
+                return moviesFromDb(items);
+            }
+        }
         for (JavdbVideoItem item : items) {
             if (item == null || StringUtils.isBlank(item.getCode())) {
                 continue;
@@ -258,6 +499,36 @@ public class JavdbScraperService {
             } catch (Exception e) {
                 log.error("javdb 首页同步失败, code={}, url={}", item.getCode(), item.getUrl(), e);
             }
+        }
+        return result;
+    }
+
+    /** 第一部影片已入库时，整页直接按番号批量读库展示，不再逐部检查/刮削。 */
+    private List<JavdbMovieVo> moviesFromDb(List<JavdbVideoItem> items) {
+        List<JavdbMovieVo> result = new ArrayList<>();
+        List<String> codes = new ArrayList<>();
+        for (JavdbVideoItem item : items) {
+            if (item != null && StringUtils.isNotBlank(item.getCode())) {
+                codes.add(item.getCode());
+            }
+        }
+        Map<String, JavdbMovie> moviesByCode = new HashMap<>();
+        for (JavdbMovie movie : javdbMapper.findByCodes(codes)) {
+            if (movie != null && StringUtils.isNotBlank(movie.getCode())) {
+                moviesByCode.put(movie.getCode(), movie);
+            }
+        }
+        for (JavdbVideoItem item : items) {
+            if (item == null || StringUtils.isBlank(item.getCode())) {
+                continue;
+            }
+            JavdbMovie movie = moviesByCode.get(item.getCode());
+            if (movie == null) {
+                log.warn("javdb 首页读库时缺少影片, code={}", item.getCode());
+                continue;
+            }
+            String cover = StringUtils.defaultIfBlank(movie.getCoverLocal(), movie.getCoverUrl());
+            result.add(toVo(movie, cover, "DB"));
         }
         return result;
     }
@@ -305,6 +576,7 @@ public class JavdbScraperService {
         vo.setGenres(movie.getGenres());
         vo.setDetailUrl(movie.getDetailUrl());
         vo.setMagnetCount(javdbMapper.countMagnetsByCode(movie.getCode()));
+        vo.setEmbyExists(movieIsExsitInSystem.isInEmby(movie.getCode()));
         vo.setSource(source);
         return vo;
     }

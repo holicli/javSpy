@@ -14,7 +14,7 @@ spring:
         mode: HTML5
 
     redis:
-        host: holicli.online:6380
+        host: 192.168.0.108
         password:
         lettuce:
             pool:

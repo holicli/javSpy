@@ -39,25 +39,76 @@
             color: #64748b;
             font-size: 0.9rem;
         }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+        }
+        .toolbar label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: #475569;
+            font-size: 0.9rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .export-btn {
+            display: inline-flex;
+            align-items: center;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.55rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .export-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .export-result {
+            color: #334155;
+            font-size: 0.9rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 0.7rem 1rem;
+            margin-bottom: 1rem;
+            word-break: break-all;
+        }
+        .check-cell {
+            text-align: center;
+        }
+        .movie-check {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
         .table-wrapper {
             background: white;
             border-radius: 20px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-            overflow: auto;
+            overflow-x: hidden;
+            overflow-y: auto;
             max-height: 75vh;
             border: 1px solid #e9eef2;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 1380px;
+            table-layout: fixed;
         }
         th {
             background: #f1f5f9;
             color: #334155;
             font-weight: 600;
-            font-size: 0.9rem;
-            padding: 1rem 0.8rem;
+            font-size: 0.85rem;
+            padding: 0.7rem 0.45rem;
             white-space: nowrap;
             border-bottom: 1px solid #dde3e9;
             position: sticky;
@@ -65,11 +116,70 @@
             z-index: 10;
         }
         td {
-            padding: 0.8rem;
+            padding: 0.6rem 0.45rem;
             border-bottom: 1px solid #edf2f6;
             color: #1e293b;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             vertical-align: middle;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .col-check {
+            width: 44px;
+            text-align: center;
+        }
+        .col-cover {
+            width: 58px;
+        }
+        .col-code {
+            width: 115px;
+        }
+        .col-duration {
+            width: 70px;
+        }
+        .col-date {
+            width: 100px;
+        }
+        .col-emby {
+            width: 72px;
+        }
+        .col-magnet {
+            width: 64px;
+        }
+        .col-source {
+            width: 82px;
+        }
+        .col-detail {
+            width: 80px;
+        }
+        .row-export-btn {
+            display: inline-block;
+            width: 100%;
+            box-sizing: border-box;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0.4rem 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .row-export-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        @media (max-width: 1200px) {
+            .col-actors, .col-genres {
+                display: none;
+            }
+        }
+        @media (max-width: 900px) {
+            .col-duration, .col-date, .col-source {
+                display: none;
+            }
         }
         tr:hover td {
             background-color: #fafcff;
@@ -132,6 +242,14 @@
             background: #eef1f4;
             color: #4b5565;
         }
+        .badge-emby-yes {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        .badge-emby-no {
+            background: #f1f5f9;
+            color: #64748b;
+        }
         .detail-link {
             color: #3b82f6;
             text-decoration: none;
@@ -190,25 +308,31 @@
 <div class="container">
     <div class="header">
         <h2>JavDB 首页影片</h2>
-        <div class="page-info" id="pageInfo">第 1 页</div>
+        <div class="toolbar">
+            <label><input type="checkbox" id="selectAllCheck"> 全选</label>
+            <button type="button" class="export-btn" id="exportMagnetBtn">保存磁链</button>
+            <span class="page-info" id="pageInfo">第 1 页</span>
+        </div>
     </div>
+
+    <div class="export-result" id="exportResult" style="display: none;"></div>
 
     <div class="table-wrapper" id="scrollTableWrapper">
         <table>
             <thead>
             <tr>
-                <th>封面</th>
-                <th>番号</th>
-                <th>标题</th>
-                <th>演员</th>
-                <th>时长</th>
-                <th>日期</th>
-                <th>片商</th>
-                <th>系列</th>
-                <th>类型</th>
-                <th>磁力</th>
-                <th>来源</th>
-                <th>详情</th>
+                <th class="col-check">选择</th>
+                <th class="col-cover">封面</th>
+                <th class="col-code">番号</th>
+                <th class="col-title">标题</th>
+                <th class="col-actors">演员</th>
+                <th class="col-duration">时长</th>
+                <th class="col-date">日期</th>
+                <th class="col-emby">Emby</th>
+                <th class="col-genres">类型</th>
+                <th class="col-magnet">磁力</th>
+                <th class="col-source">来源</th>
+                <th class="col-detail">操作</th>
             </tr>
             </thead>
             <tbody id="movieBody">
@@ -233,6 +357,9 @@
         const pageSpan = document.getElementById('pageInfo');
         const totalSpan = document.getElementById('totalInfo');
         const container = document.getElementById('scrollTableWrapper');
+        const selectAllCheck = document.getElementById('selectAllCheck');
+        const exportBtn = document.getElementById('exportMagnetBtn');
+        const exportResult = document.getElementById('exportResult');
 
         let currentPage = 1;
         let isLoading = false;
@@ -253,26 +380,31 @@
             return '<span class="badge badge-db">数据库</span>';
         }
 
+        function embyBadge(exists) {
+            return exists
+                    ? '<span class="badge badge-emby-yes">存在</span>'
+                    : '<span class="badge badge-emby-no">不存在</span>';
+        }
+
         function renderRow(movie) {
             const cover = movie.coverUrl || 'https://via.placeholder.com/50x70?text=No+Img';
             const duration = movie.duration ? movie.duration + ' 分钟' : '—';
             const magnetCount = movie.magnetCount === null || movie.magnetCount === undefined
                     ? '—' : movie.magnetCount;
-            const detailUrl = movie.detailUrl || '';
             return '<tr>' +
-                '<td class="cover-cell"><img src="' + esc(cover) + '" alt="cover" class="cover-img" loading="lazy" onerror="this.src=\'https://via.placeholder.com/50x70?text=Error\'"></td>' +
-                '<td class="code">' + esc(movie.code) + '</td>' +
-                '<td class="text-ellipsis" title="' + esc(movie.title) + '">' + esc(movie.title) + '</td>' +
-                '<td class="text-ellipsis" title="' + esc(movie.actors) + '">' + esc(movie.actors) + '</td>' +
-                '<td>' + esc(duration) + '</td>' +
-                '<td>' + esc(movie.releaseDate) + '</td>' +
-                '<td class="text-ellipsis" title="' + esc(movie.studio) + '">' + esc(movie.studio) + '</td>' +
-                '<td class="text-ellipsis" title="' + esc(movie.series) + '">' + esc(movie.series) + '</td>' +
-                '<td class="text-ellipsis" title="' + esc(movie.genres) + '">' + esc(movie.genres) + '</td>' +
-                '<td><span class="badge badge-count">' + esc(magnetCount) + '</span></td>' +
-                '<td>' + sourceBadge(movie.source) + '</td>' +
-                '<td>' + (detailUrl
-                        ? '<a class="detail-link" href="' + esc(detailUrl) + '" target="_blank" rel="noopener">打开</a>'
+                '<td class="check-cell col-check"><input type="checkbox" class="movie-check" value="' + esc(movie.code) + '"></td>' +
+                '<td class="cover-cell col-cover"><img src="' + esc(cover) + '" alt="cover" class="cover-img" loading="lazy" onerror="this.src=\'https://via.placeholder.com/50x70?text=Error\'"></td>' +
+                '<td class="code col-code">' + esc(movie.code) + '</td>' +
+                '<td class="text-ellipsis col-title" title="' + esc(movie.title) + '">' + esc(movie.title) + '</td>' +
+                '<td class="text-ellipsis col-actors" title="' + esc(movie.actors) + '">' + esc(movie.actors) + '</td>' +
+                '<td class="col-duration">' + esc(duration) + '</td>' +
+                '<td class="col-date">' + esc(movie.releaseDate) + '</td>' +
+                '<td class="col-emby">' + embyBadge(movie.embyExists) + '</td>' +
+                '<td class="text-ellipsis col-genres" title="' + esc(movie.genres) + '">' + esc(movie.genres) + '</td>' +
+                '<td class="col-magnet"><span class="badge badge-count">' + esc(magnetCount) + '</span></td>' +
+                '<td class="col-source">' + sourceBadge(movie.source) + '</td>' +
+                '<td class="col-detail">' + (movie.code
+                        ? '<button type="button" class="row-export-btn" data-code="' + esc(movie.code) + '">保存磁链</button>'
                         : '—') + '</td>' +
                 '</tr>';
         }
@@ -341,6 +473,77 @@
                 fetchPage(currentPage);
             }
         }
+
+        function selectedCodes() {
+            const codes = [];
+            tbody.querySelectorAll('.movie-check:checked').forEach(function (check) {
+                codes.push(check.value);
+            });
+            return codes;
+        }
+
+        selectAllCheck.addEventListener('change', function () {
+            const checked = selectAllCheck.checked;
+            tbody.querySelectorAll('.movie-check').forEach(function (check) {
+                check.checked = checked;
+            });
+        });
+
+        tbody.addEventListener('change', function (event) {
+            if (!event.target.classList || !event.target.classList.contains('movie-check')) {
+                return;
+            }
+            const checks = tbody.querySelectorAll('.movie-check');
+            const checked = tbody.querySelectorAll('.movie-check:checked');
+            selectAllCheck.checked = checks.length > 0 && checks.length === checked.length;
+        });
+
+        async function saveMagnets(codes, button) {
+            if (!codes || codes.length === 0) {
+                exportResult.style.display = 'block';
+                exportResult.innerHTML = '<span class="error-tip">请先勾选要导出的影片</span>';
+                return;
+            }
+            const activeButton = button || exportBtn;
+            const originalText = activeButton.textContent;
+            activeButton.disabled = true;
+            activeButton.textContent = '保存中...';
+            try {
+                const response = await fetch('/javdb/magnets/export', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(codes)
+                });
+                const result = await response.json();
+                if (!result || result.success === false) {
+                    throw new Error(result && result.message ? result.message : '接口返回失败');
+                }
+                const data = result.data || {};
+                exportResult.style.display = 'block';
+                exportResult.innerHTML = '已保存 ' + esc(data.magnetCount) + ' 条磁链、'
+                        + esc(data.noMagnetCount) + ' 个无磁链番号，共 ' + esc(data.total)
+                        + ' 部；已写入数据库表：' + esc(data.table);
+            } catch (error) {
+                console.error('保存磁链失败:', error);
+                exportResult.style.display = 'block';
+                exportResult.innerHTML = '<span class="error-tip">保存失败：' + esc(error.message) + '</span>';
+            } finally {
+                activeButton.disabled = false;
+                activeButton.textContent = originalText;
+            }
+        }
+
+        exportBtn.addEventListener('click', function () {
+            saveMagnets(selectedCodes(), exportBtn);
+        });
+
+        tbody.addEventListener('click', function (event) {
+            const button = event.target.closest ? event.target.closest('.row-export-btn') : null;
+            if (!button) {
+                return;
+            }
+            saveMagnets([button.getAttribute('data-code')], button);
+        });
 
         let scrollTimer;
         container.addEventListener('scroll', function () {

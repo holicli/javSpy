@@ -84,6 +84,28 @@
         WHERE code = #{code}
     </select>
 
+    <select id="findMagnetsByCodes" resultType="org.holic.javspy.javdb.model.JavdbMagnet">
+        SELECT id, code, detail_id, magnet, name, size_text, size_bytes, share_date, hd, subtitle, created_at
+        FROM javdb_magnet
+        WHERE code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY share_date DESC, id DESC
+    </select>
+
+    <delete id="clearMagnetExports">
+        DELETE FROM javdb_magnet_export
+    </delete>
+
+    <insert id="insertMagnetExports">
+        INSERT INTO javdb_magnet_export (code, magnet, name, size_text, share_date, status, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.code}, #{item.magnet}, #{item.name}, #{item.sizeText}, #{item.shareDate}, #{item.status}, NOW())
+        </foreach>
+    </insert>
+
     <select id="searchMovies" resultType="org.holic.javspy.javdb.model.JavdbMovie">
         SELECT <include refid="allColumns"/>
         FROM javdb_movie

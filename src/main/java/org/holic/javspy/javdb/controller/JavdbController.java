@@ -8,6 +8,8 @@ import org.holic.javspy.javdb.model.JavdbVideoItem;
 import org.holic.javspy.javdb.service.JavdbScraperService;
 import org.holic.javspy.misc.WebResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +28,24 @@ public class JavdbController {
 
     public JavdbController(JavdbScraperService scraperService) {
         this.scraperService = scraperService;
+    }
+
+    /**
+     * 将选中影片的磁链写入数据库导出表 javdb_magnet_export。
+     * 示例：POST /javdb/magnets/export，body 为 ["SSIS-123", "IPZZ-456"]
+     */
+    @PostMapping("/magnets/export")
+    public WebResult<Map<String, Object>> exportMagnets(@RequestBody List<String> codes) {
+        try {
+            Map<String, Object> result = scraperService.exportSelectedMagnets(codes);
+            return WebResult.<Map<String, Object>>builder()
+                    .success(true).data(result)
+                    .message("已保存 " + result.get("magnetCount") + " 条磁链，"
+                            + result.get("noMagnetCount") + " 个番号到数据库").build();
+        } catch (Exception e) {
+            return WebResult.<Map<String, Object>>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
     }
 
     /**

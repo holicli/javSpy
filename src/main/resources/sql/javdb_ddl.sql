@@ -50,3 +50,18 @@ CREATE TABLE IF NOT EXISTS javdb_magnet (
     KEY idx_javdb_magnet_code (code),
     KEY idx_javdb_magnet_detail_id (detail_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javdb 磁力链接';
+
+-- 选中影片磁链导出表（保存页面按钮写入的磁链，无磁链时记录番号）
+CREATE TABLE IF NOT EXISTS javdb_magnet_export (
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    code       VARCHAR(64)     NOT NULL                COMMENT '影片番号',
+    magnet     TEXT            DEFAULT NULL            COMMENT '选中的磁力链接，无磁链时为 NULL',
+    name       VARCHAR(1024)   DEFAULT NULL            COMMENT '磁力资源名称',
+    size_text  VARCHAR(128)    DEFAULT NULL            COMMENT '文件大小文本',
+    share_date VARCHAR(32)     DEFAULT NULL            COMMENT '磁力分享日期',
+    status     VARCHAR(32)     NOT NULL DEFAULT 'OK'   COMMENT 'OK=已保存磁链，NO_MAGNET=无磁链',
+    created_at DATETIME        DEFAULT NULL            COMMENT '导出时间',
+    PRIMARY KEY (id),
+    KEY idx_javdb_magnet_export_code (code),
+    KEY idx_javdb_magnet_export_created_at (created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javdb 选中影片磁链导出表';

@@ -2,6 +2,7 @@ package org.holic.javspy.javdb.mapper;
 
 import org.apache.ibatis.annotations.Param;
 import org.holic.javspy.javdb.model.JavdbMagnet;
+import org.holic.javspy.javdb.model.JavdbMagnetExport;
 import org.holic.javspy.javdb.model.JavdbMovie;
 import org.springframework.stereotype.Repository;
 
@@ -33,6 +34,15 @@ public interface JavdbMapper {
 
     /** 统计某部影片的磁力链接数量。 */
     int countMagnetsByCode(@Param("code") String code);
+
+    /** 批量按番号查询磁力链接，用于导出磁链。 */
+    List<JavdbMagnet> findMagnetsByCodes(@Param("codes") List<String> codes);
+
+    /** 清空磁链导出表。 */
+    int clearMagnetExports();
+
+    /** 批量写入本次选中的磁链导出记录。 */
+    int insertMagnetExports(@Param("list") List<JavdbMagnetExport> list);
 
     /** 按条件分页查询影片列表。 */
     List<JavdbMovie> searchMovies(@Param("code") String code,
