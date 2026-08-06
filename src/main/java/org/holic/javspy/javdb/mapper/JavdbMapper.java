@@ -1,6 +1,7 @@
 package org.holic.javspy.javdb.mapper;
 
 import org.apache.ibatis.annotations.Param;
+import org.holic.javspy.javdb.model.JavdbFollowActor;
 import org.holic.javspy.javdb.model.JavdbMagnet;
 import org.holic.javspy.javdb.model.JavdbMagnetExport;
 import org.holic.javspy.javdb.model.JavdbMovie;
@@ -48,4 +49,14 @@ public interface JavdbMapper {
     List<JavdbMovie> searchMovies(@Param("code") String code,
                                   @Param("keyword") String keyword,
                                   @Param("releaseDate") String releaseDate);
+
+    /** 查询全部关注演员。 */
+    List<JavdbFollowActor> listFollowActors();
+
+    /** 新增关注演员（重名时忽略），返回受影响行数。 */
+    int insertFollowActor(@Param("actorName") String actorName,
+                          @Param("remark") String remark);
+
+    /** 删除关注演员，返回受影响行数。 */
+    int deleteFollowActor(@Param("actorName") String actorName);
 }

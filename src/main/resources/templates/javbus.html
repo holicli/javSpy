@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavBus 影片</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+        body { background: #f5f7fa; margin: 0; min-height: 100vh; padding: 2rem 1rem; }
+        .container { max-width: 1600px; width: 100%; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        h2 { font-weight: 500; color: #1e293b; margin: 0; border-left: 5px solid #3b82f6; padding-left: 1rem; }
+        .toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+        .toolbar input[type="text"] {
+            padding: 0.5rem 0.8rem; border: 1px solid #d1d9e0; border-radius: 8px;
+            font-size: 0.9rem; outline: none; width: 220px;
+        }
+        .toolbar button {
+            display: inline-flex; align-items: center; background: #2563eb; color: #fff;
+            border: none; border-radius: 8px; padding: 0.55rem 1rem; font-size: 0.9rem;
+            font-weight: 600; cursor: pointer; white-space: nowrap;
+        }
+        .toolbar button.secondary { background: #475569; }
+        .toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .page-info { color: #64748b; font-size: 0.9rem; }
+        .table-wrapper {
+            background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            overflow-x: hidden; overflow-y: auto; max-height: 75vh; border: 1px solid #e9eef2;
+        }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th {
+            background: #f1f5f9; color: #334155; font-weight: 600; font-size: 0.85rem;
+            padding: 0.7rem 0.45rem; white-space: nowrap; border-bottom: 1px solid #dde3e9;
+            position: sticky; top: 0; z-index: 10;
+        }
+        td {
+            padding: 0.6rem 0.45rem; border-bottom: 1px solid #edf2f6; color: #1e293b;
+            font-size: 0.85rem; vertical-align: middle; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .col-cover { width: 58px; }
+        .col-code { width: 115px; }
+        .col-duration { width: 70px; }
+        .col-date { width: 100px; }
+        .cover-cell { position: relative; display: flex; justify-content: center; align-items: center; height: 70px; width: 50px; }
+        .cover-img {
+            width: 50px; height: 70px; object-fit: cover; border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: zoom-in; display: block;
+        }
+        .cover-preview {
+            position: fixed; z-index: 10000; pointer-events: none; border-radius: 12px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.6);
+            background: #fff;
+        }
+        .code { color: #3b82f6; font-weight: 600; white-space: nowrap; }
+        .text-ellipsis { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .badge {
+            display: inline-block; padding: 0.2rem 0.6rem; border-radius: 30px;
+            font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+        }
+        .badge-count { background: #eef1f4; color: #4b5565; }
+        tr:hover td { background-color: #fafcff; }
+        .loading-indicator { text-align: center; padding: 1.2rem; color: #64748b; font-size: 0.9rem; border-top: 1px dashed #d4dfe9; background: #f9fbfd; }
+        .spinner {
+            display: inline-block; width: 18px; height: 18px; border: 2px solid #cbd5e1;
+            border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.7s linear infinite;
+            margin-right: 6px; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-row td { padding: 3rem; text-align: center; color: #94a3b8; }
+        .error-tip { color: #b91c1c; background: #fee2e2; padding: 0.5rem 1rem; border-radius: 30px; display: inline-block; }
+        footer { margin-top: 20px; color: #6b7b8f; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h2>JavBus 影片</h2>
+        <div class="toolbar">
+            <input type="text" id="keywordInput" placeholder="搜索番号 / 演员 / 关键词">
+            <button type="button" id="searchBtn">搜索</button>
+            <button type="button" id="scrapePageBtn" class="secondary">刮削当前页</button>
+            <span class="page-info" id="pageInfo">第 1 页</span>
+        </div>
+    </div>
+
+    <div class="table-wrapper" id="scrollTableWrapper">
+        <table>
+            <thead>
+            <tr>
+                <th class="col-cover">封面</th>
+                <th class="col-code">番号</th>
+                <th class="col-title">标题</th>
+                <th class="col-actors">演员</th>
+                <th class="col-duration">时长</th>
+                <th class="col-date">日期</th>
+                <th class="col-genres">类型</th>
+                <th class="col-magnet">磁力</th>
+            </tr>
+            </thead>
+            <tbody id="movieBody">
+            <tr class="empty-row"><td colspan="8">加载中，请稍候...</td></tr>
+            </tbody>
+        </table>
+        <div id="loadMoreTrigger" class="loading-indicator">
+            <span class="spinner"></span> 加载更多...
+        </div>
+    </div>
+
+    <footer>
+        <span>滚动到底部自动加载下一页</span>
+        <span id="totalInfo">已加载 0 部</span>
+    </footer>
+</div>
+
+<script>
+    (function () {
+        const tbody = document.getElementById('movieBody');
+        const loadMoreDiv = document.getElementById('loadMoreTrigger');
+        const pageSpan = document.getElementById('pageInfo');
+        const totalSpan = document.getElementById('totalInfo');
+        const container = document.getElementById('scrollTableWrapper');
+        const keywordInput = document.getElementById('keywordInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const scrapePageBtn = document.getElementById('scrapePageBtn');
+
+        let currentPage = 1;
+        let isLoading = false;
+        let hasMore = true;
+        let total = 0;
+        let searchMode = false;
+
+        function esc(value) {
+            if (value === null || value === undefined) return '';
+            return String(value).replace(/[&<>"']/g, function (c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+            });
+        }
+
+        function renderRow(movie) {
+            const cover = movie.coverUrl || movie.cover || 'https://via.placeholder.com/50x70?text=No+Img';
+            const duration = movie.duration ? movie.duration + ' 分钟' : '—';
+            return '<tr>' +
+                '<td class="cover-cell col-cover">' +
+                '<img src="' + esc(cover) + '" alt="cover" class="cover-img" loading="lazy" ' +
+                'onerror="this.src=\'https://via.placeholder.com/50x70?text=Error\'">' +
+                '</td>' +
+                '<td class="code col-code">' + esc(movie.code) + '</td>' +
+                '<td class="text-ellipsis col-title" title="' + esc(movie.title) + '">' + esc(movie.title) + '</td>' +
+                '<td class="text-ellipsis col-actors" title="' + esc(movie.actors) + '">' + esc(movie.actors) + '</td>' +
+                '<td class="col-duration">' + esc(duration) + '</td>' +
+                '<td class="col-date">' + esc(movie.releaseDate) + '</td>' +
+                '<td class="text-ellipsis col-genres" title="' + esc(movie.genres) + '">' + esc(movie.genres) + '</td>' +
+                '<td class="col-magnet"><span class="badge badge-count">' + esc(movie.magnetCount === undefined ? '—' : movie.magnetCount) + '</span></td>' +
+                '</tr>';
+        }
+
+        function appendMovies(movies) {
+            const emptyRow = tbody.querySelector('.empty-row');
+            if (emptyRow) tbody.innerHTML = '';
+            let html = '';
+            movies.forEach(function (movie) {
+                html += renderRow(movie);
+            });
+            tbody.insertAdjacentHTML('beforeend', html);
+            total += movies.length;
+            totalSpan.innerText = '已加载 ' + total + ' 部';
+        }
+
+        async function fetchPage(page) {
+            if (isLoading || !hasMore) return;
+            isLoading = true;
+            loadMoreDiv.innerHTML = '<span class="spinner"></span> 正在加载第 ' + page + ' 页...';
+            try {
+                const keyword = keywordInput.value.trim();
+                let url;
+                if (searchMode && keyword) {
+                    url = '/javbus/search/list?keyword=' + encodeURIComponent(keyword) + '&pages=' + page;
+                } else {
+                    url = '/javbus/scrape/page?page=' + page + '&withDetail=false';
+                }
+                const response = await fetch(url, {headers: {'Accept': 'application/json'}});
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const result = await response.json();
+                if (!result || result.success === false) {
+                    throw new Error(result && result.message ? result.message : '接口返回失败');
+                }
+                const data = Array.isArray(result.data) ? result.data : [];
+                const movies = searchMode
+                        ? data.map(function (item) {
+                            return {code: item.code, title: item.title, coverUrl: item.cover, url: item.url};
+                        })
+                        : data;
+                pageSpan.innerText = '第 ' + page + ' 页';
+                if (movies.length === 0) {
+                    hasMore = false;
+                    loadMoreDiv.innerHTML = '已加载全部';
+                    if (page === 1 && tbody.children.length <= 1) {
+                        tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无影片数据</td></tr>';
+                    }
+                    return;
+                }
+                appendMovies(movies);
+                loadMoreDiv.innerHTML = '向下滚动加载更多...';
+                setTimeout(checkAndLoadMoreIfNeeded, 150);
+            } catch (error) {
+                console.error('加载失败:', error);
+                loadMoreDiv.innerHTML = '<span class="error-tip">加载失败：' + esc(error.message) + '</span>';
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        function onScrollHandler() {
+            if (!hasMore || isLoading) return;
+            const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            if (scrollBottom < 80) {
+                currentPage++;
+                fetchPage(currentPage);
+            }
+        }
+
+        function checkAndLoadMoreIfNeeded() {
+            if (!hasMore || isLoading) return;
+            if (container.scrollHeight <= container.clientHeight + 80) {
+                currentPage++;
+                fetchPage(currentPage);
+            }
+        }
+
+        function resetAndLoad() {
+            currentPage = 1;
+            hasMore = true;
+            total = 0;
+            totalSpan.innerText = '已加载 0 部';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">加载中，请稍候...</td></tr>';
+            fetchPage(1);
+        }
+
+        searchBtn.addEventListener('click', function () {
+            const keyword = keywordInput.value.trim();
+            if (!keyword) {
+                searchMode = false;
+            } else {
+                searchMode = true;
+            }
+            resetAndLoad();
+        });
+
+        keywordInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                searchBtn.click();
+            }
+        });
+
+        scrapePageBtn.addEventListener('click', function () {
+            scrapePageBtn.disabled = true;
+            scrapePageBtn.textContent = '刮削中...';
+            fetch('/javbus/scrape/page?page=' + currentPage + '&withDetail=true')
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (result && result.success) {
+                        resetAndLoad();
+                    } else {
+                        alert('刮削失败：' + (result && result.message ? result.message : '未知错误'));
+                    }
+                })
+                .catch(function (error) {
+                    alert('刮削失败：' + error.message);
+                })
+                .finally(function () {
+                    scrapePageBtn.disabled = false;
+                    scrapePageBtn.textContent = '刮削当前页';
+                });
+        });
+
+        let scrollTimer;
+        container.addEventListener('scroll', function () {
+            if (scrollTimer) clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(onScrollHandler, 120);
+        });
+
+        // 封面悬浮放大预览（fixed 定位，避免被表格 overflow 裁剪）
+        let previewEl = null;
+        tbody.addEventListener('mouseover', function (event) {
+            const img = event.target;
+            if (!img.classList || !img.classList.contains('cover-img')) return;
+            if (!previewEl) {
+                previewEl = document.createElement('img');
+                previewEl.className = 'cover-preview';
+                document.body.appendChild(previewEl);
+            }
+            previewEl.src = img.src;
+            const rect = img.getBoundingClientRect();
+            const scale = 3;
+            const w = rect.width * scale;
+            const h = rect.height * scale;
+            let left = rect.left + rect.width / 2 - w / 2;
+            let top = rect.top + rect.height / 2 - h / 2;
+            left = Math.max(4, Math.min(left, window.innerWidth - w - 4));
+            top = Math.max(4, Math.min(top, window.innerHeight - h - 4));
+            previewEl.style.width = w + 'px';
+            previewEl.style.height = h + 'px';
+            previewEl.style.left = left + 'px';
+            previewEl.style.top = top + 'px';
+            previewEl.style.display = 'block';
+        });
+        tbody.addEventListener('mouseout', function (event) {
+            const img = event.target;
+            if (!img.classList || !img.classList.contains('cover-img')) return;
+            if (previewEl) previewEl.style.display = 'none';
+        });
+
+        fetchPage(1);
+    })();
+</script>
+</body>
+</html>

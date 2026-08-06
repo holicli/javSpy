@@ -20,6 +20,11 @@ public class EmbyMovieChecker {
     private final String serverUrl;
     private final String apiKey;
 
+    /** 连接超时（毫秒），Emby 不可达时快速失败，避免阻塞调用方 */
+    private static final int CONNECT_TIMEOUT_MS = 5000;
+    /** 读取超时（毫秒），Emby 响应缓慢时快速失败 */
+    private static final int READ_TIMEOUT_MS = 10000;
+
     /**
      * 构造函数
      * @param serverUrl Emby服务器地址，例如：http://192.168.1.100:8096
@@ -117,6 +122,8 @@ public class EmbyMovieChecker {
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setRequestProperty("Accept", "application/json");
+        conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+        conn.setReadTimeout(READ_TIMEOUT_MS);
 
         int responseCode = conn.getResponseCode();
         if (responseCode != 200) {

@@ -1,5 +1,6 @@
 package org.holic.javspy.javdb.client;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -41,6 +42,7 @@ import java.util.regex.Pattern;
 public class JavdbApiClient {
 
     /** 站点地址，默认 https://javdb.com */
+    @Getter
     @Value("${conf.javdb.base-url:https://javdb.com}")
     private String baseUrl;
 
@@ -553,11 +555,8 @@ public class JavdbApiClient {
 
     /** 组装 Cookie：always 带上 over18=1（成人确认），用户 cookie 追加在后面。 */
     private String buildCookieHeader() {
-        StringBuilder cookieHeader = new StringBuilder("over18=1");
-        if (StringUtils.isNotBlank(cookie)) {
-            cookieHeader.append("; ").append(cookie);
-        }
-        return cookieHeader.toString();
+        // 原样透传配置的完整 Cookie（含 over18 / remember_me_token / cf_clearance 等）
+        return StringUtils.isNotBlank(cookie) ? cookie.trim() : "";
     }
 
     /** 返回第一个非空字符串；全部为空时返回 null。 */

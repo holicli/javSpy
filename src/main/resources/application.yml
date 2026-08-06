@@ -14,7 +14,7 @@ spring:
         mode: HTML5
 
     redis:
-        host: 192.168.0.108
+        host: 127.0.0.1
         password:
         lettuce:
             pool:
@@ -82,7 +82,7 @@ conf:
         # 不配置时只能抓搜索页/部分详情，磁力链接通常需要 cookie
         cookie: "eyJfcmFpbHMiOnsibWVzc2FnZSI6IklubE9TSHBHUjI4MlEyTnRSbFpJUzNaZlJWZ3hJZz09IiwiZXhwIjoiMjAyNi0wOC0xMVQwODo0MDoyNS4wMDBaIiwicHVyIjoiY29va2llLnJlbWVtYmVyX21lX3Rva2VuIn19--6501e847aabdf4054d90dd497f612f80e7b7d70d;"
         # 代理总开关：false 时即使配置了 host/port 也不会走代理
-        proxy-enabled: false
+        proxy-enabled: true
         # SOCKS5 代理（javdb 被墙时通过本地代理访问）
         proxy-host: 127.0.0.1
         proxy-port: 7890
@@ -91,4 +91,19 @@ conf:
         # 两次请求间隔（毫秒），避免请求过快被封
         request-interval-ms: 1500
         # 是否在后台控制台直接打印抓到的 HTML（调试用）
+        print-html: true
+
+    javbus:
+        # javbus 站点地址
+        base-url: https://www.javbus.com
+        # 登录 cookie（部分页面需要，可留空）
+        cookie: ""
+        # SOCKS5 代理（可选，和 javdb 同一代理）
+        proxy-host: 127.0.0.1
+        proxy-port: 7890
+        # 单次请求超时（毫秒）
+        timeout-ms: 20000
+        # 两次请求间隔（毫秒）
+        request-interval-ms: 1500
+        # 是否打印 HTML 到控制台（调试用）
         print-html: false

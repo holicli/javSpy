@@ -51,6 +51,16 @@ CREATE TABLE IF NOT EXISTS javdb_magnet (
     KEY idx_javdb_magnet_detail_id (detail_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javdb 磁力链接';
 
+-- 关注演员表
+CREATE TABLE IF NOT EXISTS javdb_follow_actor (
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    actor_name VARCHAR(128)    NOT NULL                COMMENT '演员名称',
+    remark     VARCHAR(256)    DEFAULT NULL            COMMENT '备注',
+    created_at DATETIME        DEFAULT NULL            COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_javdb_follow_actor_name (actor_name)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javdb 关注演员表';
+
 -- 选中影片磁链导出表（保存页面按钮写入的磁链，无磁链时记录番号）
 CREATE TABLE IF NOT EXISTS javdb_magnet_export (
     id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',

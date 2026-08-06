@@ -464,7 +464,12 @@ public class JavdbScraperService {
      */
     public List<JavdbMovieVo> homeMoviesWithSync(int page) throws Exception {
         if (page == 1) {
-            movieIsExsitInSystem.refreshEmbyListIfAvailable();
+            // Emby 探活：不通则跳过刷新，避免阻塞首页
+            if (movieIsExsitInSystem.isEmbyAvailable()) {
+                movieIsExsitInSystem.refreshEmbyListIfAvailable();
+            } else {
+                log.warn("Emby 不可用，跳过刷新影片列表");
+            }
         }
         List<JavdbMovieVo> result = new ArrayList<>();
         List<JavdbVideoItem> items = apiClient.pageMovies(page);
@@ -527,8 +532,7 @@ public class JavdbScraperService {
                 log.warn("javdb 首页读库时缺少影片, code={}", item.getCode());
                 continue;
             }
-            String cover = StringUtils.defaultIfBlank(movie.getCoverLocal(), movie.getCoverUrl());
-            result.add(toVo(movie, cover, "DB"));
+            result.add(toVo(movie, resolveLocalCover(movie, item.getCover()), "DB"));
         }
         return result;
     }

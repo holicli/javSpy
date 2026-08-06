@@ -124,4 +124,20 @@
         </where>
         ORDER BY release_date DESC, id DESC
     </select>
+
+    <select id="listFollowActors" resultType="org.holic.javspy.javdb.model.JavdbFollowActor">
+        SELECT id, actor_name, remark, created_at
+        FROM javdb_follow_actor
+        ORDER BY created_at DESC, id DESC
+    </select>
+
+    <insert id="insertFollowActor">
+        INSERT IGNORE INTO javdb_follow_actor (actor_name, remark, created_at)
+        VALUES (#{actorName}, #{remark}, NOW())
+    </insert>
+
+    <delete id="deleteFollowActor">
+        DELETE FROM javdb_follow_actor
+        WHERE actor_name = #{actorName}
+    </delete>
 </mapper>
