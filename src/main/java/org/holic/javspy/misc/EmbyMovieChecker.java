@@ -3,8 +3,6 @@ package org.holic.javspy.misc;
 import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.holic.javspy.model.MediaItem;
-import org.holic.javspy.model.MovieItem;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -169,42 +167,42 @@ public class EmbyMovieChecker {
      * 获取所有影片
      * @return 如果存在返回true，否则返回false
      */
-    public List<String> getAllMovieFromEmby() {
-        List<String> names = new ArrayList<>();
-        List<String> dyname = new ArrayList<>();
-        try {
-            // 构建API请求URL /emby/Items?Recursive=true&IncludeItemTypes=Movie
-            String apiUrl = String.format("%s/emby/Items?IncludeItemTypes=Movie&Recursive=true&api_key=%s",
-                    serverUrl, apiKey);
-
-            // 发送HTTP请求
-            String response = sendGetRequest(apiUrl);
-
-            // 解析JSON响应
-            JSONObject jsonResponse = new JSONObject(response);
-            JSONArray items = jsonResponse.getJSONArray("Items");
-
-
-            List<MediaItem> mediaItemList = JSON.parseArray(items.toString(), MediaItem.class);
-            // 检查是否有匹配的影片
-            for (int i = 0; i < items.length(); i++) {
-                JSONObject item = items.getJSONObject(i);
-                String itemName = item.getString("Name");
-                String strBeforeSpace = getStrBeforeSpace(itemName);
-                if (names.contains(strBeforeSpace)) {
-                    dyname.add(strBeforeSpace);
-                } else {
-                    names.add(strBeforeSpace);
-                }
-
-            }
-            return names;
-
-        } catch (Exception e) {
-            System.err.println("检查影片时出错: " + e.getMessage());
-            return null;
-        }
-    }
+//    public List<String> getAllMovieFromEmby() {
+//        List<String> names = new ArrayList<>();
+//        List<String> dyname = new ArrayList<>();
+//        try {
+//            // 构建API请求URL /emby/Items?Recursive=true&IncludeItemTypes=Movie
+//            String apiUrl = String.format("%s/emby/Items?IncludeItemTypes=Movie&Recursive=true&api_key=%s",
+//                    serverUrl, apiKey);
+//
+//            // 发送HTTP请求
+//            String response = sendGetRequest(apiUrl);
+//
+//            // 解析JSON响应
+//            JSONObject jsonResponse = new JSONObject(response);
+//            JSONArray items = jsonResponse.getJSONArray("Items");
+//
+//
+//            List<MediaItem> mediaItemList = JSON.parseArray(items.toString(), MediaItem.class);
+//            // 检查是否有匹配的影片
+//            for (int i = 0; i < items.length(); i++) {
+//                JSONObject item = items.getJSONObject(i);
+//                String itemName = item.getString("Name");
+//                String strBeforeSpace = getStrBeforeSpace(itemName);
+//                if (names.contains(strBeforeSpace)) {
+//                    dyname.add(strBeforeSpace);
+//                } else {
+//                    names.add(strBeforeSpace);
+//                }
+//
+//            }
+//            return names;
+//
+//        } catch (Exception e) {
+//            System.err.println("检查影片时出错: " + e.getMessage());
+//            return null;
+//        }
+//    }
 
     public String getStrBeforeSpace(String str){
         int firstSpaceIndex = str.indexOf(' ');
@@ -225,8 +223,8 @@ public class EmbyMovieChecker {
         String apiKey = "bd87f9a3632e4e409314ae45f71d99db";
 
         EmbyMovieChecker checker = new EmbyMovieChecker(serverUrl, apiKey);
-        List<String> allMovieFromEmby = checker.getAllMovieFromEmby();
-        System.out.println(allMovieFromEmby);
+//        List<String> allMovieFromEmby = checker.getAllMovieFromEmby();
+//        System.out.println(allMovieFromEmby);
 //        List<String> lists = Arrays.asList(new String[]{"ABF-306","ACH-078","ADN-734","HMN-787","JUR-568","JUR-605","JUR-624","MIDA-459","MIDA-462","MIMK-257","NSFS-449","START-451"});
 //        for (String name :lists){
 //            boolean b = checker.checkMovieExistsByName(name);

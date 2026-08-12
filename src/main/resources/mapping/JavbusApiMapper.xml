@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiMapper">
+
+    <sql id="allColumns">
+        id, code, title, cover_url, cover_hd, cover_width, cover_height,
+        release_date, duration, director_id, studio_id, publisher_id, series_id,
+        detail_url, gid, uc, raw_json, created_at, updated_at
+    </sql>
+
+    <!-- ========== 影片 ========== -->
+
+    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javbus_movie
+        WHERE code = #{code}
+        LIMIT 1
+    </select>
+
+    <select id="findByCodes" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javbus_movie
+        WHERE code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <insert id="insertMovie" parameterType="org.holic.javspy.javbusapi.model.JavbusApiMovie"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO javbus_movie (
+            code, title, cover_url, cover_hd, cover_width, cover_height,
+            release_date, duration, director_id, studio_id, publisher_id, series_id,
+            detail_url, gid, uc, raw_json, created_at, updated_at
+        ) VALUES (
+            #{code}, #{title}, #{coverUrl}, #{coverHd}, #{coverWidth}, #{coverHeight},
+            #{releaseDate}, #{duration}, #{directorId}, #{studioId}, #{publisherId}, #{seriesId},
+            #{detailUrl}, #{gid}, #{uc}, #{rawJson}, NOW(), NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            title         = VALUES(title),
+            cover_url     = VALUES(cover_url),
+            cover_hd      = VALUES(cover_hd),
+            cover_width   = VALUES(cover_width),
+            cover_height  = VALUES(cover_height),
+            release_date  = VALUES(release_date),
+            duration      = VALUES(duration),
+            director_id   = VALUES(director_id),
+            studio_id     = VALUES(studio_id),
+            publisher_id  = VALUES(publisher_id),
+            series_id     = VALUES(series_id),
+            detail_url    = VALUES(detail_url),
+            gid           = VALUES(gid),
+            uc            = VALUES(uc),
+            updated_at    = NOW()
+    </insert>
+
+    <select id="searchMovies" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javbus_movie
+        <where>
+            <if test="code != null and code != ''">
+                AND code = #{code}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (title LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="releaseDate != null and releaseDate != ''">
+                AND release_date = #{releaseDate}
+            </if>
+        </where>
+        ORDER BY release_date DESC, id DESC
+    </select>
+
+    <!-- ========== 磁力 ========== -->
+
+    <insert id="insertMagnets">
+        INSERT IGNORE INTO javbus_magnet (
+            magnet_id, movie_id, code, link, title, is_hd, size_text, size_bytes,
+            share_date, has_subtitle, created_at
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.magnetId}, #{item.movieId}, #{item.code}, #{item.magnet}, #{item.name},
+                #{item.hd}, #{item.sizeText}, #{item.sizeBytes},
+                #{item.shareDate}, #{item.subtitle}, NOW()
+            )
+        </foreach>
+    </insert>
+
+    <select id="countMagnetsByCode" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM javbus_magnet
+        WHERE code = #{code}
+    </select>
+
+    <!-- ========== 实体表 ========== -->
+
+    <insert id="upsertStar">
+        INSERT INTO javbus_star (id, name, avatar, birthday, age, height, bust,
+                                 waistline, hipline, birthplace, hobby, created_at, updated_at)
+        VALUES (#{id}, #{name}, #{avatar}, #{birthday}, #{age}, #{height}, #{bust},
+                #{waistline}, #{hipline}, #{birthplace}, #{hobby}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            name       = VALUES(name),
+            avatar     = VALUES(avatar),
+            birthday   = VALUES(birthday),
+            age        = VALUES(age),
+            height     = VALUES(height),
+            bust       = VALUES(bust),
+            waistline  = VALUES(waistline),
+            hipline    = VALUES(hipline),
+            birthplace = VALUES(birthplace),
+            hobby      = VALUES(hobby),
+            updated_at = NOW()
+    </insert>
+
+    <insert id="upsertStars">
+        INSERT INTO javbus_star (id, name, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.name}, NOW(), NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            name       = VALUES(name),
+            updated_at = NOW()
+    </insert>
+
+    <insert id="upsertDirector">
+        INSERT INTO javbus_director (id, name, created_at)
+        VALUES (#{id}, #{name}, NOW())
+        ON DUPLICATE KEY UPDATE name = VALUES(name)
+    </insert>
+
+    <insert id="upsertStudio">
+        INSERT INTO javbus_studio (id, name, created_at)
+        VALUES (#{id}, #{name}, NOW())
+        ON DUPLICATE KEY UPDATE name = VALUES(name)
+    </insert>
+
+    <insert id="upsertPublisher">
+        INSERT INTO javbus_publisher (id, name, created_at)
+        VALUES (#{id}, #{name}, NOW())
+        ON DUPLICATE KEY UPDATE name = VALUES(name)
+    </insert>
+
+    <insert id="upsertSeries">
+        INSERT INTO javbus_series (id, name, created_at)
+        VALUES (#{id}, #{name}, NOW())
+        ON DUPLICATE KEY UPDATE name = VALUES(name)
+    </insert>
+
+    <insert id="upsertGenre">
+        INSERT INTO javbus_genre (id, name, created_at)
+        VALUES (#{id}, #{name}, NOW())
+        ON DUPLICATE KEY UPDATE name = VALUES(name)
+    </insert>
+
+    <!-- ========== 关联表 ========== -->
+
+    <insert id="insertMovieStars">
+        INSERT IGNORE INTO javbus_movie_star (movie_id, star_id)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.id})
+        </foreach>
+    </insert>
+
+    <insert id="insertMovieGenres">
+        INSERT IGNORE INTO javbus_movie_genre (movie_id, genre_id)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.id})
+        </foreach>
+    </insert>
+
+    <insert id="insertMovieSamples">
+        INSERT INTO javbus_movie_sample (movie_id, sample_id, alt, src, thumbnail, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.sampleId}, #{item.alt}, #{item.src}, #{item.thumbnail}, NOW())
+        </foreach>
+    </insert>
+
+    <insert id="insertMovieSimilars">
+        INSERT IGNORE INTO javbus_movie_similar (movie_id, similar_code, similar_title, similar_img, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.code}, #{item.title}, #{item.img}, NOW())
+        </foreach>
+    </insert>
+
+    <!-- ========== 查询（详情展示用） ========== -->
+
+    <select id="findSamplesByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovieSample">
+        SELECT s.sample_id AS sampleId, s.alt AS alt, s.src AS src, s.thumbnail AS thumbnail
+        FROM javbus_movie_sample s
+        JOIN javbus_movie m ON m.id = s.movie_id
+        WHERE m.code = #{code}
+        ORDER BY s.id ASC
+    </select>
+
+    <select id="findStarsByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
+        SELECT st.id AS id, st.name AS name, st.avatar AS avatar, st.birthday AS birthday,
+               st.age AS age, st.height AS height, st.bust AS bust, st.waistline AS waistline,
+               st.hipline AS hipline, st.birthplace AS birthplace, st.hobby AS hobby
+        FROM javbus_movie_star ms
+        JOIN javbus_star st ON st.id = ms.star_id
+        JOIN javbus_movie m ON m.id = ms.movie_id
+        WHERE m.code = #{code}
+        ORDER BY ms.star_id ASC
+    </select>
+
+    <select id="findStarById" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
+        SELECT id, name, avatar, birthday, age, height, bust, waistline,
+               hipline, birthplace, hobby, created_at AS createdAt, updated_at AS updatedAt
+        FROM javbus_star
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <!-- ========== 关注演员 ========== -->
+
+    <select id="listFollowActors" resultType="org.holic.javspy.javbusapi.model.JavbusFollowActor">
+        SELECT id, actor_name, remark, created_at
+        FROM javbus_follow_actor
+        ORDER BY created_at DESC, id DESC
+    </select>
+
+    <insert id="insertFollowActor">
+        INSERT IGNORE INTO javbus_follow_actor (actor_name, remark, created_at)
+        VALUES (#{actorName}, #{remark}, NOW())
+    </insert>
+
+    <delete id="deleteFollowActor">
+        DELETE FROM javbus_follow_actor
+        WHERE actor_name = #{actorName}
+    </delete>
+</mapper>

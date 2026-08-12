@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavBus API 影片</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+        body { background: #f5f7fa; margin: 0; min-height: 100vh; padding: 2rem 1rem; }
+        .container { max-width: 1600px; width: 100%; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        h2 { font-weight: 500; color: #1e293b; margin: 0; border-left: 5px solid #3b82f6; padding-left: 1rem; }
+        .toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+        .toolbar input[type="text"] {
+            padding: 0.5rem 0.8rem; border: 1px solid #d1d9e0; border-radius: 8px;
+            font-size: 0.9rem; outline: none; width: 220px;
+        }
+        .toolbar button {
+            display: inline-flex; align-items: center; background: #2563eb; color: #fff;
+            border: none; border-radius: 8px; padding: 0.55rem 1rem; font-size: 0.9rem;
+            font-weight: 600; cursor: pointer; white-space: nowrap;
+        }
+        .toolbar button.secondary { background: #475569; }
+        .toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .page-info { color: #64748b; font-size: 0.9rem; }
+        .table-wrapper {
+            background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            overflow-x: hidden; overflow-y: auto; max-height: 75vh; border: 1px solid #e9eef2;
+        }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th {
+            background: #f1f5f9; color: #334155; font-weight: 600; font-size: 0.85rem;
+            padding: 0.7rem 0.45rem; white-space: nowrap; border-bottom: 1px solid #dde3e9;
+            position: sticky; top: 0; z-index: 10;
+        }
+        td {
+            padding: 0.6rem 0.45rem; border-bottom: 1px solid #edf2f6; color: #1e293b;
+            font-size: 0.85rem; vertical-align: middle; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .col-cover { width: 58px; }
+        .col-code { width: 115px; }
+        .col-duration { width: 70px; }
+        .col-date { width: 100px; }
+        .cover-cell { position: relative; display: flex; justify-content: center; align-items: center; height: 70px; width: 50px; }
+        .cover-img {
+            width: 50px; height: 70px; object-fit: cover; border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: zoom-in; display: block;
+        }
+        .cover-preview {
+            position: fixed; z-index: 10000; pointer-events: none; border-radius: 12px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.6);
+            background: #fff;
+        }
+        .code { color: #3b82f6; font-weight: 600; white-space: nowrap; }
+        .text-ellipsis { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .badge {
+            display: inline-block; padding: 0.2rem 0.6rem; border-radius: 30px;
+            font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+        }
+        .badge-count { background: #eef1f4; color: #4b5565; }
+        tr:hover td { background-color: #fafcff; }
+        .loading-indicator { text-align: center; padding: 1.2rem; color: #64748b; font-size: 0.9rem; border-top: 1px dashed #d4dfe9; background: #f9fbfd; }
+        .spinner {
+            display: inline-block; width: 18px; height: 18px; border: 2px solid #cbd5e1;
+            border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.7s linear infinite;
+            margin-right: 6px; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-row td { padding: 3rem; text-align: center; color: #94a3b8; }
+        .error-tip { color: #b91c1c; background: #fee2e2; padding: 0.5rem 1rem; border-radius: 30px; display: inline-block; }
+        footer { margin-top: 20px; color: #6b7b8f; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; }
+        .detail-btn {
+            display: inline-block; background: #2563eb; color: #fff; border: none;
+            border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+        }
+        .detail-btn:hover { background: #1d4ed8; }
+        .modal-mask {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 20000;
+            display: none; align-items: flex-start; justify-content: center;
+            overflow-y: auto; padding: 2rem 1rem;
+        }
+        .modal-mask.show { display: flex; }
+        .modal-box {
+            background: #fff; border-radius: 16px; max-width: 900px; width: 100%;
+            padding: 1.5rem; box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+        }
+        .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+        .modal-head h3 { margin: 0; color: #1e293b; font-size: 1.05rem; line-height: 1.4; }
+        .modal-close {
+            background: #eef1f4; border: none; border-radius: 50%; width: 30px; height: 30px;
+            font-size: 1rem; cursor: pointer; flex-shrink: 0; color: #475569;
+        }
+        .modal-meta { color: #64748b; font-size: 0.85rem; margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; }
+        .samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.6rem; margin-bottom: 1.2rem; }
+        .samples img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px; cursor: zoom-in; border: 1px solid #e2e8f0; }
+        .stars { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .star-chip {
+            background: #f1f5f9; border: 1px solid #e2e8f0; color: #334155;
+            border-radius: 30px; padding: 0.35rem 0.8rem; font-size: 0.85rem; cursor: pointer;
+        }
+        .star-chip:hover { background: #dbeafe; border-color: #93c5fd; }
+        .star-card { display: flex; gap: 1rem; align-items: flex-start; }
+        .star-card img { width: 120px; height: 160px; object-fit: cover; border-radius: 10px; }
+        .star-info { color: #334155; font-size: 0.9rem; line-height: 1.9; }
+        .star-info b { color: #1e293b; }
+        .modal-tip { color: #94a3b8; font-size: 0.85rem; }
+        .sample-view {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 30000;
+            display: none; align-items: center; justify-content: center; cursor: zoom-out;
+        }
+        .sample-view.show { display: flex; }
+        .sample-view img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h2>JavBus API 影片</h2>
+        <div class="toolbar">
+            <input type="text" id="keywordInput" placeholder="搜索番号 / 演员 / 关键词">
+            <button type="button" id="searchBtn">搜索</button>
+            <button type="button" id="scrapePageBtn" class="secondary">抓取并入库当前页</button>
+            <span class="page-info" id="pageInfo">第 1 页</span>
+        </div>
+    </div>
+
+    <div class="table-wrapper" id="scrollTableWrapper">
+        <table>
+            <thead>
+            <tr>
+                <th class="col-cover">封面</th>
+                <th class="col-code">番号</th>
+                <th class="col-title">标题</th>
+                <th class="col-actors">演员</th>
+                <th class="col-duration">时长</th>
+                <th class="col-date">日期</th>
+                <th class="col-genres">类型</th>
+                <th class="col-magnet">磁力</th>
+                <th class="col-detail">操作</th>
+            </tr>
+            </thead>
+            <tbody id="movieBody">
+            <tr class="empty-row"><td colspan="9">加载中，请稍候...</td></tr>
+            </tbody>
+        </table>
+        <div id="loadMoreTrigger" class="loading-indicator">
+            <span class="spinner"></span> 加载更多...
+        </div>
+    </div>
+
+    <footer>
+        <span>滚动到底部自动加载下一页</span>
+        <span id="totalInfo">已加载 0 部</span>
+    </footer>
+</div>
+
+<!-- 影片详情弹窗 -->
+<div class="modal-mask" id="movieModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3 id="movieModalTitle"></h3>
+            <button type="button" class="modal-close" id="movieModalClose">&times;</button>
+        </div>
+        <div class="modal-meta" id="movieModalMeta"></div>
+        <div id="movieModalStars"></div>
+        <div id="movieModalSamples"></div>
+    </div>
+</div>
+
+<!-- 演员详情弹窗 -->
+<div class="modal-mask" id="starModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3>演员详情</h3>
+            <button type="button" class="modal-close" id="starModalClose">&times;</button>
+        </div>
+        <div id="starModalBody"></div>
+    </div>
+</div>
+
+<!-- 预览图大图 -->
+<div class="sample-view" id="sampleView">
+    <img id="sampleViewImg" src="" alt="">
+</div>
+
+<script>
+    (function () {
+        const tbody = document.getElementById('movieBody');
+        const loadMoreDiv = document.getElementById('loadMoreTrigger');
+        const pageSpan = document.getElementById('pageInfo');
+        const totalSpan = document.getElementById('totalInfo');
+        const container = document.getElementById('scrollTableWrapper');
+        const keywordInput = document.getElementById('keywordInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const scrapePageBtn = document.getElementById('scrapePageBtn');
+
+        let currentPage = 1;
+        let isLoading = false;
+        let hasMore = true;
+        let total = 0;
+
+        function esc(value) {
+            if (value === null || value === undefined) return '';
+            return String(value).replace(/[&<>"']/g, function (c) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+            });
+        }
+
+        function renderRow(movie) {
+            const cover = movie.coverUrl || movie.cover || 'https://via.placeholder.com/50x70?text=No+Img';
+            const duration = movie.duration ? movie.duration + ' 分钟' : '—';
+            const magnetCount = movie.magnetCount === null || movie.magnetCount === undefined ? '—' : movie.magnetCount;
+            return '<tr>' +
+                '<td class="cover-cell col-cover">' +
+                '<img src="' + esc(cover) + '" alt="cover" class="cover-img" loading="lazy" ' +
+                'onerror="this.src=\'https://via.placeholder.com/50x70?text=Error\'">' +
+                '</td>' +
+                '<td class="code col-code">' + esc(movie.code) + '</td>' +
+                '<td class="text-ellipsis col-title" title="' + esc(movie.title) + '">' + esc(movie.title) + '</td>' +
+                '<td class="text-ellipsis col-actors" title="' + esc(movie.star) + '">' + esc(movie.star) + '</td>' +
+                '<td class="col-duration">' + esc(duration) + '</td>' +
+                '<td class="col-date">' + esc(movie.releaseDate) + '</td>' +
+                '<td class="text-ellipsis col-genres" title="' + esc(movie.genres) + '">' + esc(movie.genres) + '</td>' +
+                '<td class="col-magnet"><span class="badge badge-count">' + esc(magnetCount) + '</span></td>' +
+                '<td class="col-detail"><button type="button" class="detail-btn" data-code="' + esc(movie.code) + '">详情</button></td>' +
+                '</tr>';
+        }
+
+        function appendMovies(movies) {
+            const emptyRow = tbody.querySelector('.empty-row');
+            if (emptyRow) tbody.innerHTML = '';
+            let html = '';
+            movies.forEach(function (movie) {
+                html += renderRow(movie);
+            });
+            tbody.insertAdjacentHTML('beforeend', html);
+            total += movies.length;
+            totalSpan.innerText = '已加载 ' + total + ' 部';
+        }
+
+        async function fetchPage(page) {
+            if (isLoading || !hasMore) return;
+            isLoading = true;
+            loadMoreDiv.innerHTML = '<span class="spinner"></span> 正在加载第 ' + page + ' 页...';
+            try {
+                const keyword = keywordInput.value.trim();
+                let url;
+                if (keyword) {
+                    url = '/javbus-api/list?keyword=' + encodeURIComponent(keyword)
+                            + '&pageNum=' + page + '&pageSize=20';
+                } else {
+                    url = '/javbus-api/scrape/page?page=' + page + '&magnet=exist&withDetail=false';
+                }
+                const response = await fetch(url, {headers: {'Accept': 'application/json'}});
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const result = await response.json();
+                if (!result || result.success === false) {
+                    throw new Error(result && result.message ? result.message : '接口返回失败');
+                }
+                let movies;
+                if (keyword) {
+                    const pageInfo = result.data || {};
+                    movies = (pageInfo.list || []).map(function (m) {
+                        return {
+                            code: m.code, title: m.title, coverUrl: m.coverUrl,
+                            actors: m.actors, duration: m.duration,
+                            releaseDate: m.releaseDate, genres: m.genres,
+                            magnetCount: m.magnetCount
+                        };
+                    });
+                } else {
+                    const data = Array.isArray(result.data) ? result.data : [];
+                    movies = data.map(function (item) {
+                        return {code: item.code, title: item.title, coverUrl: item.coverUrl,
+                            actors: item.actors, duration: item.duration,
+                            releaseDate: item.releaseDate, genres: item.genres,
+                            magnetCount: item.magnetCount};
+                    });
+                }
+                pageSpan.innerText = '第 ' + page + ' 页';
+                if (movies.length === 0) {
+                    hasMore = false;
+                    loadMoreDiv.innerHTML = '已加载全部';
+                    if (page === 1 && tbody.children.length <= 1) {
+                        tbody.innerHTML = '<tr class="empty-row"><td colspan="9">暂无影片数据</td></tr>';
+                    }
+                    return;
+                }
+                appendMovies(movies);
+                loadMoreDiv.innerHTML = '向下滚动加载更多...';
+                setTimeout(checkAndLoadMoreIfNeeded, 150);
+            } catch (error) {
+                console.error('加载失败:', error);
+                loadMoreDiv.innerHTML = '<span class="error-tip">加载失败：' + esc(error.message) + '</span>';
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        function onScrollHandler() {
+            if (!hasMore || isLoading) return;
+            const scrollBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            if (scrollBottom < 80) {
+                currentPage++;
+                fetchPage(currentPage);
+            }
+        }
+
+        function checkAndLoadMoreIfNeeded() {
+            if (!hasMore || isLoading) return;
+            if (container.scrollHeight <= container.clientHeight + 80) {
+                currentPage++;
+                fetchPage(currentPage);
+            }
+        }
+
+        function resetAndLoad() {
+            currentPage = 1;
+            hasMore = true;
+            total = 0;
+            totalSpan.innerText = '已加载 0 部';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="9">加载中，请稍候...</td></tr>';
+            fetchPage(1);
+        }
+
+        searchBtn.addEventListener('click', resetAndLoad);
+        keywordInput.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                searchBtn.click();
+            }
+        });
+
+        scrapePageBtn.addEventListener('click', function () {
+            scrapePageBtn.disabled = true;
+            scrapePageBtn.textContent = '抓取中...';
+            fetch('/javbus-api/scrape/page?page=' + currentPage + '&magnet=exist&withDetail=true')
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (result && result.success) {
+                        alert('抓取完成，共处理 ' + result.data.length + ' 部影片');
+                        resetAndLoad();
+                    } else {
+                        alert('抓取失败：' + (result && result.message ? result.message : '未知错误'));
+                    }
+                })
+                .catch(function (error) {
+                    alert('抓取失败：' + error.message);
+                })
+                .finally(function () {
+                    scrapePageBtn.disabled = false;
+                    scrapePageBtn.textContent = '抓取并入库当前页';
+                });
+        });
+
+        let scrollTimer;
+        container.addEventListener('scroll', function () {
+            if (scrollTimer) clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(onScrollHandler, 120);
+        });
+
+        // 封面悬浮放大预览
+        let previewEl = null;
+        tbody.addEventListener('mouseover', function (event) {
+            const img = event.target;
+            if (!img.classList || !img.classList.contains('cover-img')) return;
+            if (!previewEl) {
+                previewEl = document.createElement('img');
+                previewEl.className = 'cover-preview';
+                document.body.appendChild(previewEl);
+            }
+            previewEl.src = img.src;
+            const rect = img.getBoundingClientRect();
+            const scale = 3;
+            const w = rect.width * scale;
+            const h = rect.height * scale;
+            let left = rect.left + rect.width / 2 - w / 2;
+            let top = rect.top + rect.height / 2 - h / 2;
+            left = Math.max(4, Math.min(left, window.innerWidth - w - 4));
+            top = Math.max(4, Math.min(top, window.innerHeight - h - 4));
+            previewEl.style.width = w + 'px';
+            previewEl.style.height = h + 'px';
+            previewEl.style.left = left + 'px';
+            previewEl.style.top = top + 'px';
+            previewEl.style.display = 'block';
+        });
+        tbody.addEventListener('mouseout', function (event) {
+            const img = event.target;
+            if (!img.classList || !img.classList.contains('cover-img')) return;
+            if (previewEl) previewEl.style.display = 'none';
+        });
+
+        // ===== 影片详情弹窗 =====
+        const movieModal = document.getElementById('movieModal');
+        const movieModalTitle = document.getElementById('movieModalTitle');
+        const movieModalMeta = document.getElementById('movieModalMeta');
+        const movieModalStars = document.getElementById('movieModalStars');
+        const movieModalSamples = document.getElementById('movieModalSamples');
+
+        function showMovieDetail(code) {
+            movieModalTitle.innerText = '加载中...';
+            movieModalMeta.innerText = '';
+            movieModalStars.innerHTML = '';
+            movieModalSamples.innerHTML = '';
+            movieModal.classList.add('show');
+            fetch('/javbus-api/movie?code=' + encodeURIComponent(code), {headers: {'Accept': 'application/json'}})
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (!result || result.success === false) {
+                        throw new Error(result && result.message ? result.message : '加载失败');
+                    }
+                    const data = result.data || {};
+                    if (!data.found || !data.movie) {
+                        movieModalTitle.innerText = code + '（未入库）';
+                        movieModalMeta.innerText = '尚未抓取该影片详情';
+                        return;
+                    }
+                    const m = data.movie;
+                    movieModalTitle.innerText = m.code + ' ' + (m.title || '');
+                    movieModalMeta.innerHTML =
+                        '日期：' + esc(m.releaseDate || '—') +
+                        '　时长：' + esc(m.duration ? m.duration + ' 分钟' : '—') +
+                        '　导演：' + esc(m.director || '—') +
+                        '　片商：' + esc(m.studio || '—') +
+                        '　系列：' + esc(m.series || '—');
+                    const stars = data.stars || [];
+                    if (stars.length > 0) {
+                        let html = '<div style="margin-bottom:0.8rem;color:#475569;font-size:0.85rem;">演员（点击查看详情）：</div><div class="stars">';
+                        stars.forEach(function (s) {
+                            html += '<button type="button" class="star-chip" data-star-id="' + esc(s.id) + '">' + esc(s.name) + '</button>';
+                        });
+                        html += '</div>';
+                        movieModalStars.innerHTML = html;
+                    } else {
+                        movieModalStars.innerHTML = '<div class="modal-tip">暂无演员信息</div>';
+                    }
+                    const samples = data.samples || [];
+                    if (samples.length > 0) {
+                        let html = '<div style="margin-bottom:0.5rem;color:#475569;font-size:0.85rem;">预览图（点击查看大图）：</div><div class="samples">';
+                        samples.forEach(function (s) {
+                            const src = s.src || s.thumbnail;
+                            const thumb = s.thumbnail || s.src;
+                            html += '<img src="' + esc(thumb) + '" alt="preview" loading="lazy" data-src="' + esc(src) + '">';
+                        });
+                        html += '</div>';
+                        movieModalSamples.innerHTML = html;
+                    } else {
+                        movieModalSamples.innerHTML = '<div class="modal-tip">暂无预览图</div>';
+                    }
+                })
+                .catch(function (error) {
+                    movieModalTitle.innerText = code;
+                    movieModalMeta.innerHTML = '<span class="error-tip">' + esc(error.message) + '</span>';
+                });
+        }
+
+        tbody.addEventListener('click', function (event) {
+            const btn = event.target.closest ? event.target.closest('.detail-btn') : null;
+            if (btn) {
+                showMovieDetail(btn.getAttribute('data-code'));
+            }
+        });
+
+        document.getElementById('movieModalClose').addEventListener('click', function () {
+            movieModal.classList.remove('show');
+        });
+        movieModal.addEventListener('click', function (event) {
+            if (event.target === movieModal) {
+                movieModal.classList.remove('show');
+            }
+        });
+
+        // ===== 演员详情弹窗 =====
+        const starModal = document.getElementById('starModal');
+        const starModalBody = document.getElementById('starModalBody');
+
+        function showStarDetail(starId, starName) {
+            starModalBody.innerHTML = '加载中...';
+            starModal.classList.add('show');
+            fetch('/javbus-api/star?id=' + encodeURIComponent(starId) + '&type=normal', {headers: {'Accept': 'application/json'}})
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (!result || result.success === false) {
+                        throw new Error(result && result.message ? result.message : '加载失败');
+                    }
+                    const star = (result.data || {}).star;
+                    if (!star) {
+                        starModalBody.innerHTML = '<div class="modal-tip">未找到演员：' + esc(starName) + '</div>';
+                        return;
+                    }
+                    let html = '<div class="star-card">';
+                    if (star.avatar) {
+                        html += '<img src="' + esc(star.avatar) + '" alt="avatar" onerror="this.style.display=\'none\'">';
+                    }
+                    html += '<div class="star-info">' +
+                        '<div><b>名字：</b>' + esc(star.name) + '</div>' +
+                        '<div><b>生日：</b>' + esc(star.birthday || '—') + '</div>' +
+                        '<div><b>年龄：</b>' + esc(star.age || '—') + '</div>' +
+                        '<div><b>身高：</b>' + esc(star.height || '—') + '</div>' +
+                        '<div><b>三围：</b>' + esc(star.bust || '—') + ' / ' + esc(star.waistline || '—') + ' / ' + esc(star.hipline || '—') + '</div>' +
+                        '<div><b>出生地：</b>' + esc(star.birthplace || '—') + '</div>' +
+                        '<div><b>爱好：</b>' + esc(star.hobby || '—') + '</div>' +
+                        '</div></div>';
+                    starModalBody.innerHTML = html;
+                })
+                .catch(function (error) {
+                    starModalBody.innerHTML = '<span class="error-tip">' + esc(error.message) + '</span>';
+                });
+        }
+
+        movieModal.addEventListener('click', function (event) {
+            const chip = event.target.closest ? event.target.closest('.star-chip') : null;
+            if (!chip) return;
+            showStarDetail(chip.getAttribute('data-star-id'), chip.textContent);
+        });
+
+        document.getElementById('starModalClose').addEventListener('click', function () {
+            starModal.classList.remove('show');
+        });
+        starModal.addEventListener('click', function (event) {
+            if (event.target === starModal) {
+                starModal.classList.remove('show');
+            }
+        });
+
+        // ===== 预览图大图查看 =====
+        const sampleView = document.getElementById('sampleView');
+        const sampleViewImg = document.getElementById('sampleViewImg');
+        movieModalSamples.addEventListener('click', function (event) {
+            const img = event.target;
+            if (!img || img.tagName !== 'IMG' || !img.getAttribute('data-src')) return;
+            sampleViewImg.src = img.getAttribute('data-src');
+            sampleView.classList.add('show');
+        });
+        sampleView.addEventListener('click', function () {
+            sampleView.classList.remove('show');
+        });
+
+        fetchPage(1);
+    })();
+</script>
+</body>
+</html>
