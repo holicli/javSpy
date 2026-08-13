@@ -168,7 +168,8 @@ public class JavbusApiClient {
         JavbusApiMovie movie = new JavbusApiMovie();
         movie.setCode(firstNonBlank(d.getString("id"), movieId.trim().toUpperCase()));
         movie.setTitle(d.getString("title"));
-        movie.setCoverUrl(d.getString("img"));
+        // 详情接口的 img 是高清大图 -> 存 cover_hd；cover_url 由列表页 item.getCover() 提供
+        movie.setCoverHd(d.getString("img"));
         movie.setReleaseDate(d.getString("date"));
         movie.setDuration(d.getInteger("videoLength"));
         movie.setGid(d.getString("gid"));

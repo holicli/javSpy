@@ -208,17 +208,16 @@
         }
 
         function renderRow(movie) {
-            const cover = movie.coverUrl || movie.cover || 'https://via.placeholder.com/50x70?text=No+Img';
+            const cover = movie.coverUrl;
             const duration = movie.duration ? movie.duration + ' 分钟' : '—';
             const magnetCount = movie.magnetCount === null || movie.magnetCount === undefined ? '—' : movie.magnetCount;
             return '<tr>' +
                 '<td class="cover-cell col-cover">' +
-                '<img src="' + esc(cover) + '" alt="cover" class="cover-img" loading="lazy" ' +
-                'onerror="this.src=\'https://via.placeholder.com/50x70?text=Error\'">' +
+                '<img src="' + esc(cover) + '" alt="cover" class="cover-img" loading="lazy">' +
                 '</td>' +
                 '<td class="code col-code">' + esc(movie.code) + '</td>' +
                 '<td class="text-ellipsis col-title" title="' + esc(movie.title) + '">' + esc(movie.title) + '</td>' +
-                '<td class="text-ellipsis col-actors" title="' + esc(movie.star) + '">' + esc(movie.star) + '</td>' +
+                '<td class="text-ellipsis col-actors" title="' + esc(movie.actors) + '">' + esc(movie.actors) + '</td>' +
                 '<td class="col-duration">' + esc(duration) + '</td>' +
                 '<td class="col-date">' + esc(movie.releaseDate) + '</td>' +
                 '<td class="text-ellipsis col-genres" title="' + esc(movie.genres) + '">' + esc(movie.genres) + '</td>' +

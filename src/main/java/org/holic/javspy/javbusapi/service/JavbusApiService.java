@@ -13,6 +13,7 @@ import org.holic.javspy.javbusapi.model.JavbusApiScrapeResult;
 import org.holic.javspy.javbusapi.model.JavbusApiStar;
 import org.holic.javspy.javbusapi.model.JavbusApiVideoItem;
 import org.holic.javspy.javbusapi.model.JavbusFollowActor;
+import org.holic.javspy.misc.ImageDownloadService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +33,13 @@ public class JavbusApiService {
 
     private final JavbusApiClient apiClient;
     private final JavbusApiMapper javbusApiMapper;
+    private final ImageDownloadService imageDownloadService;
 
-    public JavbusApiService(JavbusApiClient apiClient, JavbusApiMapper javbusApiMapper) {
+    public JavbusApiService(JavbusApiClient apiClient, JavbusApiMapper javbusApiMapper,
+                            ImageDownloadService imageDownloadService) {
         this.apiClient = apiClient;
         this.javbusApiMapper = javbusApiMapper;
+        this.imageDownloadService = imageDownloadService;
     }
 
     /**
@@ -121,16 +125,12 @@ public class JavbusApiService {
                         continue;
                     }
                     JavbusApiMovie movie = byCode.get(item.getCode());
-                    List<JavbusApiStar> starList = javbusApiMapper.findStarsByCode(item.getCode());
-                    String stars = starList.stream()
-                            .map(JavbusApiStar::getName)
-                            .collect(Collectors.joining(","));
+
                     if (movie == null) {
                         log.warn("javbus-api 读库时缺少影片, code={}", item.getCode());
                         continue;
                     }
                     Map<String, Object> row = toDisplayRow(movie);
-                    row.put("star", stars);
                     row.put("status", "DB");
                     summary.add(row);
                 }
@@ -171,6 +171,7 @@ public class JavbusApiService {
                 row.put("status", "FAILED");
                 row.put("message", "详情获取失败");
             } else {
+                result.getMovie().setCoverUrl(item.getCover());
                 saveResult(result);
                 row.put("movie", result.getMovie());
                 row.put("actors", result.getMovie().getActors());
@@ -180,8 +181,10 @@ public class JavbusApiService {
                 row.put("studio", result.getMovie().getStudio());
                 row.put("series", result.getMovie().getSeries());
                 row.put("start", result.getMovie().getStars());
-                row.put("coverUrl", item.getCover());
-                row.put("HDUrl", result.getMovie().getCoverUrl());
+                row.put("coverUrl", result.getMovie().getCoverLocal() != null
+                        ? result.getMovie().getCoverLocal()
+                        : result.getMovie().getCoverUrl());
+                row.put("HDUrl", result.getMovie().getCoverHd());
                 row.put("releaseDate", result.getMovie().getReleaseDate());
                 row.put("status", "INSERTED");
                 row.put("magnetCount",
@@ -223,6 +226,13 @@ public class JavbusApiService {
 
     /** 影片 -> 展示行：join 出导演/制作商/发行商/系列名称 + 演员/类别 + 磁力数量。 */
     private Map<String, Object> toDisplayRow(JavbusApiMovie movie) {
+        List<JavbusApiStar> starList = javbusApiMapper.findStarsByCode(movie.getCode());
+        String stars = starList.stream()
+                .map(JavbusApiStar::getName)
+                .collect(Collectors.joining(","));
+
+        List<String> genreByCode = javbusApiMapper.findGenreByCode(movie.getCode());
+        String genres = String.join(",", genreByCode);
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("code", movie.getCode());
         row.put("title", movie.getTitle());
@@ -234,8 +244,8 @@ public class JavbusApiService {
         row.put("studio", movie.getStudio());
         row.put("publisher", movie.getPublisher());
         row.put("series", movie.getSeries());
-        row.put("actors", movie.getActors());
-        row.put("genres", movie.getGenres());
+        row.put("genres",genres);
+        row.put("actors", stars);
         row.put("gid", movie.getGid());
         row.put("uc", movie.getUc());
         row.put("magnetCount", javbusApiMapper.countMagnetsByCode(movie.getCode()));
@@ -284,6 +294,9 @@ public class JavbusApiService {
         movie.setUpdatedAt(now);
         javbusApiMapper.insertMovie(movie);
 
+        // 2.1 下载封面到本地并回写 cover_local（带 javbus Referer 绕过防盗链）
+        downloadCoverToLocal(movie);
+
         // 3. 磁力（回填 movie_id）
         if (result.getMagnets() != null && !result.getMagnets().isEmpty()) {
             for (JavbusApiMagnet magnet : result.getMagnets()) {
@@ -313,6 +326,26 @@ public class JavbusApiService {
     /** 连通性自检。 */
     public String ping() {
         return apiClient.ping();
+    }
+
+    /** 下载封面到本地：优先 cover_url（列表缩略图），其次 cover_hd（详情大图）。 */
+    private void downloadCoverToLocal(JavbusApiMovie movie) {
+        String remote = StringUtils.defaultIfBlank(movie.getCoverUrl(), movie.getCoverHd());
+        if (StringUtils.isBlank(remote)) {
+            return;
+        }
+        try {
+            String fileName = ImageDownloadService.extractFileName(remote);
+            String localUrl = imageDownloadService.getImageUrl(
+                    remote, fileName, "https://www.javbus.com/");
+            if (StringUtils.isNotBlank(localUrl)) {
+                movie.setCoverLocal(localUrl);
+                javbusApiMapper.updateCoverLocal(movie.getCode(), localUrl);
+                log.info("javbus-api 封面已下载到本地, code={}, local={}", movie.getCode(), localUrl);
+            }
+        } catch (Exception e) {
+            log.warn("javbus-api 封面下载失败, code={}, url={}", movie.getCode(), remote, e);
+        }
     }
 
     /**

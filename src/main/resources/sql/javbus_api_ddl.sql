@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS javbus_movie (
     title        VARCHAR(1024)   DEFAULT NULL            COMMENT '标题',
     cover_url    VARCHAR(1024)   DEFAULT NULL            COMMENT '封面图（列表缩略图）',
     cover_hd     VARCHAR(1024)   DEFAULT NULL            COMMENT '高清封面图（详情大图）',
+    cover_local  VARCHAR(1024)   DEFAULT NULL            COMMENT '本地封面图地址',
     cover_width  INT             DEFAULT NULL            COMMENT '封面大图宽度',
     cover_height INT             DEFAULT NULL            COMMENT '封面大图高度',
     release_date VARCHAR(32)     DEFAULT NULL            COMMENT '发售日期 yyyy-MM-dd',
@@ -34,6 +35,9 @@ CREATE TABLE IF NOT EXISTS javbus_movie (
     KEY idx_javbus_movie_publisher (publisher_id),
     KEY idx_javbus_movie_series (series_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 影片信息';
+
+-- 若表已存在，执行以下语句补字段：
+-- ALTER TABLE javbus_movie ADD COLUMN cover_local VARCHAR(1024) DEFAULT NULL COMMENT '本地封面图地址' AFTER cover_hd;
 
 -- 2. 磁力链接表
 CREATE TABLE IF NOT EXISTS javbus_magnet (

@@ -28,6 +28,9 @@ public interface JavbusApiMapper {
     /** 插入影片；已存在（番号冲突）时更新可更新字段。 */
     int insertMovie(JavbusApiMovie movie);
 
+    /** 回写本地封面地址。 */
+    int updateCoverLocal(@Param("code") String code, @Param("coverLocal") String coverLocal);
+
     /** 按条件分页查询影片列表。 */
     List<JavbusApiMovie> searchMovies(@Param("code") String code,
                                       @Param("keyword") String keyword,
@@ -89,6 +92,9 @@ public interface JavbusApiMapper {
 
     /** 按影片 code 查询演员列表（关联 javbus_movie_star / javbus_star）。 */
     List<JavbusApiStar> findStarsByCode(@Param("code") String code);
+
+    /** 按影片 code 查询系列列表（关联 javbus_movie_star） */
+    List<String> findGenreByCode(@Param("code") String code);
 
     /** 按演员 ID 查询演员详情。 */
     JavbusApiStar findStarById(@Param("id") String id);

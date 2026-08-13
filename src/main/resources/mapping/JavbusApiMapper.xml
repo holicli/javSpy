@@ -3,7 +3,7 @@
 <mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiMapper">
 
     <sql id="allColumns">
-        id, code, title, cover_url, cover_hd, cover_width, cover_height,
+        id, code, title, cover_url, cover_hd, cover_local, cover_width, cover_height,
         release_date, duration, director_id, studio_id, publisher_id, series_id,
         detail_url, gid, uc, raw_json, created_at, updated_at
     </sql>
@@ -29,11 +29,11 @@
     <insert id="insertMovie" parameterType="org.holic.javspy.javbusapi.model.JavbusApiMovie"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO javbus_movie (
-            code, title, cover_url, cover_hd, cover_width, cover_height,
+            code, title, cover_url, cover_hd, cover_local, cover_width, cover_height,
             release_date, duration, director_id, studio_id, publisher_id, series_id,
             detail_url, gid, uc, raw_json, created_at, updated_at
         ) VALUES (
-            #{code}, #{title}, #{coverUrl}, #{coverHd}, #{coverWidth}, #{coverHeight},
+            #{code}, #{title}, #{coverUrl}, #{coverHd}, #{coverLocal}, #{coverWidth}, #{coverHeight},
             #{releaseDate}, #{duration}, #{directorId}, #{studioId}, #{publisherId}, #{seriesId},
             #{detailUrl}, #{gid}, #{uc}, #{rawJson}, NOW(), NOW()
         )
@@ -41,6 +41,7 @@
             title         = VALUES(title),
             cover_url     = VALUES(cover_url),
             cover_hd      = VALUES(cover_hd),
+            cover_local   = VALUES(cover_local),
             cover_width   = VALUES(cover_width),
             cover_height  = VALUES(cover_height),
             release_date  = VALUES(release_date),
@@ -54,6 +55,13 @@
             uc            = VALUES(uc),
             updated_at    = NOW()
     </insert>
+
+    <update id="updateCoverLocal">
+        UPDATE javbus_movie
+        SET cover_local = #{coverLocal},
+            updated_at  = NOW()
+        WHERE code = #{code}
+    </update>
 
     <select id="searchMovies" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
         SELECT <include refid="allColumns"/>
@@ -225,6 +233,10 @@
         SELECT id, actor_name, remark, created_at
         FROM javbus_follow_actor
         ORDER BY created_at DESC, id DESC
+    </select>
+    <select id="findGenreByCode" resultType="java.lang.String" parameterType="java.lang.String">
+        select name from javbus_movie jm  left join javbus_movie_genre jmg on jm.id = jmg.movie_id
+                                          left join javbus_genre jg on jmg.genre_id = jg.id where jm.code = #{code}
     </select>
 
     <insert id="insertFollowActor">

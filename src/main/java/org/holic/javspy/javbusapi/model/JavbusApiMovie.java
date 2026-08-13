@@ -30,6 +30,9 @@ public class JavbusApiMovie implements Serializable {
     /** 高清封面图（详情大图） */
     private String coverHd;
 
+    /** 本地封面图地址 */
+    private String coverLocal;
+
     /** 封面大图宽度 */
     private Integer coverWidth;
 
