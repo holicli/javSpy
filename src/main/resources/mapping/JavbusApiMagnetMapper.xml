@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiMagnetMapper">
+
+    <insert id="insertBatch">
+        INSERT IGNORE INTO javbus_magnet (
+            magnet_id, movie_id, code, link, title, is_hd, size_text, size_bytes,
+            share_date, has_subtitle, created_at
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+            (
+                #{item.magnetId}, #{item.movieId}, #{item.code}, #{item.magnet}, #{item.name},
+                #{item.hd}, #{item.sizeText}, #{item.sizeBytes}, #{item.shareDate}, #{item.subtitle}, NOW()
+            )
+        </foreach>
+    </insert>
+
+    <select id="countByCode" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM javbus_magnet
+        WHERE code = #{code}
+    </select>
+
+    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMagnet">
+        SELECT id, magnet_id AS magnetId, movie_id AS movieId, code,
+               link AS magnet, title AS name, is_hd AS hd, size_text AS sizeText,
+               size_bytes AS sizeBytes, share_date AS shareDate,
+               has_subtitle AS subtitle, created_at AS createdAt
+        FROM javbus_magnet
+        WHERE code = #{code}
+        ORDER BY share_date DESC, id DESC
+    </select>
+
+    <insert id="insertSave">
+        INSERT INTO javbus_magnet_save (code, magnet, saved_date)
+        VALUES (#{code}, #{magnet}, CURDATE())
+    </insert>
+</mapper>

@@ -183,9 +183,10 @@ public class JavbusApiService {
                 row.put("studio", result.getMovie().getStudio());
                 row.put("series", result.getMovie().getSeries());
                 row.put("start", result.getMovie().getStars());
-                row.put("coverUrl", result.getMovie().getCoverLocal() != null
-                        ? result.getMovie().getCoverLocal()
-                        : result.getMovie().getCoverUrl());
+                row.put("coverUrl", ImageDownloadService.normalizeAccessUrl(
+                        result.getMovie().getCoverLocal() != null
+                                ? result.getMovie().getCoverLocal()
+                                : result.getMovie().getCoverUrl()));
                 row.put("HDUrl", result.getMovie().getCoverHd());
                 row.put("releaseDate", result.getMovie().getReleaseDate());
                 row.put("status", "INSERTED");
@@ -238,7 +239,7 @@ public class JavbusApiService {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("code", movie.getCode());
         row.put("title", movie.getTitle());
-        row.put("coverUrl", movie.getCoverLocal());
+        row.put("coverUrl", ImageDownloadService.normalizeAccessUrl(movie.getCoverLocal()));
         row.put("coverHd", movie.getCoverHd());
         row.put("releaseDate", movie.getReleaseDate());
         row.put("duration", movie.getDuration());

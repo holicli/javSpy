@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiStarMapper">
+
+    <insert id="upsert">
+        INSERT INTO javbus_star (id, name, avatar, birthday, age, height, bust,
+                                 waistline, hipline, birthplace, hobby, created_at, updated_at)
+        VALUES (#{id}, #{name}, #{avatar}, #{birthday}, #{age}, #{height}, #{bust},
+                #{waistline}, #{hipline}, #{birthplace}, #{hobby}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE
+            name       = VALUES(name),
+            avatar     = VALUES(avatar),
+            birthday   = VALUES(birthday),
+            age        = VALUES(age),
+            height     = VALUES(height),
+            bust       = VALUES(bust),
+            waistline  = VALUES(waistline),
+            hipline    = VALUES(hipline),
+            birthplace = VALUES(birthplace),
+            hobby      = VALUES(hobby),
+            updated_at = NOW()
+    </insert>
+
+    <insert id="upsertBatch">
+        INSERT INTO javbus_star (id, name, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.name}, NOW(), NOW())
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            name       = VALUES(name),
+            updated_at = NOW()
+    </insert>
+
+    <select id="findStarsByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
+        SELECT st.id, st.name, st.avatar, st.birthday, st.age, st.height,
+               st.bust, st.waistline, st.hipline, st.birthplace, st.hobby
+        FROM javbus_movie_star ms
+        JOIN javbus_star st ON st.id = ms.star_id
+        JOIN javbus_movie m ON m.id = ms.movie_id
+        WHERE m.code = #{code}
+        ORDER BY ms.star_id ASC
+    </select>
+</mapper>

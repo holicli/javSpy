@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiMovieSampleMapper">
+
+    <insert id="insertBatch">
+        INSERT INTO javbus_movie_sample (movie_id, sample_id, alt, src, thumbnail, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.sampleId}, #{item.alt}, #{item.src}, #{item.thumbnail}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovieSample">
+        SELECT s.id, s.movie_id AS movieId, s.sample_id AS sampleId, s.alt AS alt,
+               s.src AS src, s.thumbnail AS thumbnail, s.created_at AS createdAt
+        FROM javbus_movie_sample s
+        JOIN javbus_movie m ON m.id = s.movie_id
+        WHERE m.code = #{code}
+        ORDER BY s.id ASC
+    </select>
+
+    <delete id="deleteByMovieId">
+        DELETE FROM javbus_movie_sample
+        WHERE movie_id = #{movieId}
+    </delete>
+</mapper>

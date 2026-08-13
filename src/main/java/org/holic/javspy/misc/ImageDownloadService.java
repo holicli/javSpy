@@ -42,6 +42,10 @@ public class ImageDownloadService {
     @Value("${conf.javbus-api.proxy-port:0}")
     private int proxyPort;
 
+    /** 图片存储目录（application.yml 的 conf.image.storage-path，服务器上建议配置绝对路径） */
+    @Value("${conf.image.storage-path:../pic}")
+    private String imageStoragePath;
+
     private OkHttpClient httpClient;
 
     @PostConstruct
@@ -57,13 +61,6 @@ public class ImageDownloadService {
         }
         this.httpClient = builder.build();
     }
-
-    // 图片存储路径
-    private static final String IMAGE_STORAGE_PATH = "../pic";
-    private static final String IMAGE_STORAGE_PATH_FNOS = "/vol1/1000/java/pic";
-
-    // 图片访问的基础URL
-    private static final String BASE_URL = "http://localhost:8084";
 
     // 连接超时设置
     private static final int CONNECT_TIMEOUT = 10000;
@@ -222,7 +219,18 @@ public class ImageDownloadService {
      * 生成可访问的URL
      */
     private String generateAccessUrl(String fileName) {
-        return BASE_URL + "/pic/" + fileName;
+        return "/pic/" + fileName;
+    }
+
+    /**
+     * 把旧版本写入的 127.0.0.1 / localhost 绝对图片地址统一转成相对路径，
+     * 部署到服务器后浏览器会按当前站点域名访问图片。
+     */
+    public static String normalizeAccessUrl(String url) {
+        if (StringUtils.isBlank(url)) {
+            return url;
+        }
+        return url.replaceAll("(?i)^https?://(127\\.0\\.0\\.1|localhost):\\d+/pic/", "/pic/");
     }
 
     /**
@@ -267,14 +275,6 @@ public class ImageDownloadService {
     }
 
     public String getImgPath() {
-        String osName = System.getProperty("os.name").toLowerCase();
-
-        if (osName.contains("win")) {
-            return IMAGE_STORAGE_PATH;
-        } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
-            return IMAGE_STORAGE_PATH_FNOS;
-        }else {
-            return IMAGE_STORAGE_PATH_FNOS;
-        }
+        return imageStoragePath;
     }
 }

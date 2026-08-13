@@ -39,15 +39,18 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class WebPicConfig implements WebMvcConfigurer {
 
+    @Value("${conf.image.storage-path:../pic}")
+    private String imageStoragePath;
+
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 使用相对路径：../pic/ 表示上一级目录下的pic文件夹
-        String picPath = "file:../pic/";
-
-
-        // 注册映射：访问 /pic/** 时，从 ../pic/ 目录读取
+        // 存储目录可配置；服务器上建议配置绝对路径，例如 /data/javspy/pic
+        String picPath = imageStoragePath.replace('\\', '/');
+        if (!picPath.endsWith("/")) {
+            picPath += "/";
+        }
         registry.addResourceHandler("/pic/**")
-                .addResourceLocations(picPath)
+                .addResourceLocations("file:" + picPath)
                 .setCachePeriod(3600);
     }
 }

@@ -1,5 +1,9 @@
 package org.holic.javspy.javbusapi.model;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -8,12 +12,14 @@ import java.util.Date;
 /**
  * javbus API 磁力链接，对应 javbus_magnet 表。
  */
+@TableName("javbus_magnet")
 @Data
 public class JavbusApiMagnet implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     /** 自增主键 */
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /** 磁力 ID（API 返回的 id） */
@@ -26,12 +32,15 @@ public class JavbusApiMagnet implements Serializable {
     private String code;
 
     /** 详情页 id（URL 中的路径段） */
+    @TableField(exist = false)
     private String detailId;
 
     /** magnet:?xt=... 完整链接 */
+    @TableField("link")
     private String magnet;
 
     /** 磁力资源名称 */
+    @TableField("title")
     private String name;
 
     /** 文件大小（原始字符串，如 6.57GB） */
@@ -44,9 +53,11 @@ public class JavbusApiMagnet implements Serializable {
     private String shareDate;
 
     /** 是否高清（1 是 0 否） */
+    @TableField("is_hd")
     private Integer hd;
 
     /** 是否有中文字幕（1 是 0 否） */
+    @TableField("has_subtitle")
     private Integer subtitle;
 
     /** 入库时间 */

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiSimilarMovieMapper">
+
+    <insert id="insertBatch">
+        INSERT IGNORE INTO javbus_movie_similar (movie_id, similar_code, similar_title, similar_img, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.code}, #{item.title}, #{item.img}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiSimilarMovie">
+        SELECT s.movie_id AS movieId, s.similar_code AS code, s.similar_title AS title,
+               s.similar_img AS img, s.created_at AS createdAt
+        FROM javbus_movie_similar s
+        JOIN javbus_movie m ON m.id = s.movie_id
+        WHERE m.code = #{code}
+        ORDER BY s.created_at DESC
+    </select>
+</mapper>
