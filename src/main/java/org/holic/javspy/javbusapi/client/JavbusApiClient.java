@@ -56,6 +56,10 @@ public class JavbusApiClient {
     @Value("${conf.javbus-api.proxy-host:}")
     private String proxyHost;
 
+    /** 代理总开关：false 时即使配置了 host/port 也不会走代理 */
+    @Value("${conf.javbus-api.proxy-enabled:false}")
+    private boolean proxyEnabled;
+
     /** 代理端口 */
     @Value("${conf.javbus-api.proxy-port:0}")
     private int proxyPort;
@@ -88,7 +92,7 @@ public class JavbusApiClient {
                 .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                 .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
                 .followRedirects(true);
-        if (StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
+        if (proxyEnabled && StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
             builder.proxy(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(proxyHost, proxyPort)));
             log.info("javbus-api client uses SOCKS5 proxy {}:{}", proxyHost, proxyPort);
         }

@@ -34,6 +34,10 @@ public class ImageDownloadService {
     @Value("${conf.javbus-api.proxy-host:}")
     private String proxyHost;
 
+    /** 代理总开关：false 时即使配置了 host/port 也不会走代理 */
+    @Value("${conf.javbus-api.proxy-enabled:false}")
+    private boolean proxyEnabled;
+
     /** SOCKS5 代理端口 */
     @Value("${conf.javbus-api.proxy-port:0}")
     private int proxyPort;
@@ -47,7 +51,7 @@ public class ImageDownloadService {
                 .readTimeout(SOCKET_TIMEOUT, TimeUnit.MILLISECONDS)
                 .writeTimeout(SOCKET_TIMEOUT, TimeUnit.MILLISECONDS)
                 .followRedirects(true);
-        if (StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
+        if (proxyEnabled && StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
             builder.proxy(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(proxyHost, proxyPort)));
             System.out.println("图片下载走 SOCKS5 代理: " + proxyHost + ":" + proxyPort);
         }
