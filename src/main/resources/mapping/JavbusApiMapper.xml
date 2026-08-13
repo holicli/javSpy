@@ -102,6 +102,21 @@
         WHERE code = #{code}
     </select>
 
+    <select id="findMagnetsByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMagnet">
+        SELECT id, magnet_id AS magnetId, movie_id AS movieId, code,
+               link AS magnet, title AS name, is_hd AS hd, size_text AS sizeText,
+               size_bytes AS sizeBytes, share_date AS shareDate,
+               has_subtitle AS subtitle, created_at AS createdAt
+        FROM javbus_magnet
+        WHERE code = #{code}
+        ORDER BY share_date DESC, id DESC
+    </select>
+
+    <insert id="insertMagnetSave">
+        INSERT INTO javbus_magnet_save (code, magnet, saved_date)
+        VALUES (#{code}, #{magnet}, CURDATE())
+    </insert>
+
     <!-- ========== 实体表 ========== -->
 
     <insert id="upsertStar">

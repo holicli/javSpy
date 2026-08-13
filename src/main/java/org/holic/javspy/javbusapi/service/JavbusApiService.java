@@ -130,6 +130,8 @@ public class JavbusApiService {
                         log.warn("javbus-api 读库时缺少影片, code={}", item.getCode());
                         continue;
                     }
+                    // 封面本地缺失时先下载（cover_url 优先，其次 cover_hd）
+                    ensureCoverLocal(movie);
                     Map<String, Object> row = toDisplayRow(movie);
                     row.put("status", "DB");
                     summary.add(row);
@@ -236,7 +238,7 @@ public class JavbusApiService {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("code", movie.getCode());
         row.put("title", movie.getTitle());
-        row.put("coverUrl", movie.getCoverUrl());
+        row.put("coverUrl", movie.getCoverLocal());
         row.put("coverHd", movie.getCoverHd());
         row.put("releaseDate", movie.getReleaseDate());
         row.put("duration", movie.getDuration());
@@ -348,6 +350,20 @@ public class JavbusApiService {
         }
     }
 
+    /** 检查本地封面是否存在；缺失则下载。 */
+    private void ensureCoverLocal(JavbusApiMovie movie) {
+        if (movie == null || StringUtils.isBlank(movie.getCode())) {
+            return;
+        }
+        if (StringUtils.isNotBlank(movie.getCoverLocal())) {
+            String fileName = ImageDownloadService.extractFileName(movie.getCoverLocal());
+            if (StringUtils.isNotBlank(fileName) && imageDownloadService.checkImageExists(fileName)) {
+                return;
+            }
+        }
+        downloadCoverToLocal(movie);
+    }
+
     /**
      * 影片详情展示：基本信息 + 演员 + 预览图。
      */
@@ -436,6 +452,31 @@ public class JavbusApiService {
             throw new IllegalArgumentException("演员名称不能为空");
         }
         int rows = javbusApiMapper.deleteFollowActor(actorName.trim());
+        return rows > 0;
+    }
+
+    /**
+     * 查询某部影片的全部磁力链接（含相关信息）。
+     */
+    public List<JavbusApiMagnet> magnetsByCode(String code) {
+        if (StringUtils.isBlank(code)) {
+            throw new IllegalArgumentException("番号不能为空");
+        }
+        return javbusApiMapper.findMagnetsByCode(code.trim().toUpperCase());
+    }
+
+    /**
+     * 保存磁力链接到单独表 javbus_magnet_save（code + magnet + 插入日期）。
+     */
+    public boolean saveMagnet(String code, String magnet) {
+        if (StringUtils.isBlank(code)) {
+            throw new IllegalArgumentException("番号不能为空");
+        }
+        if (StringUtils.isBlank(magnet)) {
+            throw new IllegalArgumentException("磁力链接不能为空");
+        }
+        int rows = javbusApiMapper.insertMagnetSave(
+                code.trim().toUpperCase(), magnet.trim());
         return rows > 0;
     }
 }

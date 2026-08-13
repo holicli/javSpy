@@ -156,3 +156,13 @@ CREATE TABLE IF NOT EXISTS javbus_movie_similar (
     created_at    DATETIME        DEFAULT NULL COMMENT '创建时间',
     PRIMARY KEY (movie_id, similar_code)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 影片-相似影片关联';
+
+-- 13. 磁力保存表（单独保存用户选中的磁力链接）
+CREATE TABLE IF NOT EXISTS javbus_magnet_save (
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '自增主键',
+    code       VARCHAR(64)     NOT NULL                COMMENT '影片番号',
+    magnet     TEXT            NOT NULL                COMMENT '磁力链接',
+    saved_date DATE            DEFAULT NULL            COMMENT '插入日期 yyyy-MM-dd',
+    PRIMARY KEY (id),
+    KEY idx_javbus_magnet_save_code (code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 磁力保存表';

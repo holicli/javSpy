@@ -111,6 +111,34 @@
         }
         .sample-view.show { display: flex; }
         .sample-view img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+        .magnet-btn {
+            display: inline-block; background: #059669; color: #fff; border: none;
+            border-radius: 6px; padding: 0.35rem 0.8rem; font-size: 0.85rem; cursor: pointer;
+            margin-bottom: 0.8rem;
+        }
+        .magnet-btn:hover { background: #047857; }
+        .magnet-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.82rem; }
+        .magnet-table th {
+            background: #f1f5f9; color: #334155; font-weight: 600; padding: 0.5rem 0.5rem;
+            border-bottom: 1px solid #dde3e9; text-align: left; white-space: nowrap;
+        }
+        .magnet-table td {
+            padding: 0.45rem 0.5rem; border-bottom: 1px solid #edf2f6; color: #1e293b;
+            word-break: break-all; vertical-align: middle;
+        }
+        .magnet-table tr:hover td { background: #fafcff; }
+        .save-magnet-btn {
+            background: #2563eb; color: #fff; border: none; border-radius: 6px;
+            padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer; white-space: nowrap;
+        }
+        .save-magnet-btn:hover { background: #1d4ed8; }
+        .save-magnet-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .magnet-open-btn {
+            display: inline-block; background: #059669; color: #fff; border: none;
+            border-radius: 6px; padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+            margin-left: 0.3rem; white-space: nowrap;
+        }
+        .magnet-open-btn:hover { background: #047857; }
     </style>
 </head>
 <body>
@@ -168,6 +196,17 @@
     </div>
 </div>
 
+<!-- 磁力链接弹窗 -->
+<div class="modal-mask" id="magnetModal">
+    <div class="modal-box">
+        <div class="modal-head">
+            <h3 id="magnetModalTitle">磁力链接</h3>
+            <button type="button" class="modal-close" id="magnetModalClose">&times;</button>
+        </div>
+        <div id="magnetModalBody"></div>
+    </div>
+</div>
+
 <!-- 演员详情弹窗 -->
 <div class="modal-mask" id="starModal">
     <div class="modal-box">
@@ -222,7 +261,12 @@
                 '<td class="col-date">' + esc(movie.releaseDate) + '</td>' +
                 '<td class="text-ellipsis col-genres" title="' + esc(movie.genres) + '">' + esc(movie.genres) + '</td>' +
                 '<td class="col-magnet"><span class="badge badge-count">' + esc(magnetCount) + '</span></td>' +
-                '<td class="col-detail"><button type="button" class="detail-btn" data-code="' + esc(movie.code) + '">详情</button></td>' +
+                '<td class="col-detail">' +
+                '<button type="button" class="detail-btn" data-code="' + esc(movie.code) + '">详情</button>' +
+                (typeof movie.magnetCount === 'number' && movie.magnetCount > 0
+                        ? '<button type="button" class="magnet-open-btn" data-code="' + esc(movie.code) + '">磁力</button>'
+                        : '') +
+                '</td>' +
                 '</tr>';
         }
 
@@ -453,10 +497,100 @@
                 });
         }
 
+        // ===== 磁力弹窗 =====
+        const magnetModal = document.getElementById('magnetModal');
+        const magnetModalTitle = document.getElementById('magnetModalTitle');
+        const magnetModalBody = document.getElementById('magnetModalBody');
+
+        function showMagnets(code) {
+            magnetModalTitle.innerText = code + ' 磁力链接';
+            magnetModalBody.innerHTML = '<div class="modal-tip">加载磁力中...</div>';
+            magnetModal.classList.add('show');
+            fetch('/javbus-api/magnets?code=' + encodeURIComponent(code), {headers: {'Accept': 'application/json'}})
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (!result || result.success === false) {
+                        throw new Error(result && result.message ? result.message : '加载失败');
+                    }
+                    const magnets = Array.isArray(result.data) ? result.data : [];
+                    if (magnets.length === 0) {
+                        magnetModalBody.innerHTML = '<div class="modal-tip">该影片暂无磁力链接</div>';
+                        return;
+                    }
+                    let html = '<table class="magnet-table">' +
+                        '<thead><tr><th style="width:60px;">#</th><th>名称</th>' +
+                        '<th style="width:90px;">大小</th><th style="width:100px;">分享日期</th>' +
+                        '<th style="width:60px;">高清</th><th style="width:60px;">字幕</th>' +
+                        '<th style="width:80px;">操作</th></tr></thead><tbody>';
+                    magnets.forEach(function (mg, idx) {
+                        html += '<tr>' +
+                            '<td>' + (idx + 1) + '</td>' +
+                            '<td>' + esc(mg.name || mg.magnet) + '</td>' +
+                            '<td>' + esc(mg.sizeText || '—') + '</td>' +
+                            '<td>' + esc(mg.shareDate || '—') + '</td>' +
+                            '<td>' + (mg.hd ? '是' : '—') + '</td>' +
+                            '<td>' + (mg.subtitle ? '是' : '—') + '</td>' +
+                            '<td><button type="button" class="save-magnet-btn" data-code="' + esc(code) +
+                            '" data-magnet="' + esc(mg.magnet) + '">保存</button></td>' +
+                            '</tr>';
+                    });
+                    html += '</tbody></table>';
+                    magnetModalBody.innerHTML = html;
+                })
+                .catch(function (error) {
+                    magnetModalBody.innerHTML = '<span class="error-tip">' + esc(error.message) + '</span>';
+                });
+        }
+
+        document.getElementById('magnetModalClose').addEventListener('click', function () {
+            magnetModal.classList.remove('show');
+        });
+        magnetModal.addEventListener('click', function (event) {
+            if (event.target === magnetModal) {
+                magnetModal.classList.remove('show');
+            }
+        });
+
+        // 保存单条磁力到 javbus_magnet_save
+        magnetModalBody.addEventListener('click', function (event) {
+            const btn = event.target.closest ? event.target.closest('.save-magnet-btn') : null;
+            if (!btn) return;
+            const code = btn.getAttribute('data-code');
+            const magnet = btn.getAttribute('data-magnet');
+            if (!magnet) return;
+            btn.disabled = true;
+            const original = btn.textContent;
+            btn.textContent = '保存中...';
+            fetch('/javbus-api/magnets/save?code=' + encodeURIComponent(code)
+                    + '&magnet=' + encodeURIComponent(magnet), {
+                method: 'POST',
+                headers: {'Accept': 'application/json'}
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (!result || result.success === false) {
+                        throw new Error(result && result.message ? result.message : '保存失败');
+                    }
+                    btn.textContent = '已保存';
+                    btn.style.background = '#059669';
+                })
+                .catch(function (error) {
+                    alert('保存失败：' + error.message);
+                    btn.textContent = original;
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                });
+        });
+
         tbody.addEventListener('click', function (event) {
-            const btn = event.target.closest ? event.target.closest('.detail-btn') : null;
-            if (btn) {
-                showMovieDetail(btn.getAttribute('data-code'));
+            const btn = event.target.closest ? event.target.closest('.detail-btn, .magnet-open-btn') : null;
+            if (!btn) return;
+            const code = btn.getAttribute('data-code');
+            if (btn.classList.contains('magnet-open-btn')) {
+                showMagnets(code);
+            } else {
+                showMovieDetail(code);
             }
         });
 

@@ -44,6 +44,12 @@ public interface JavbusApiMapper {
     /** 查询某部影片已入库的磁力链接数量。 */
     int countMagnetsByCode(@Param("code") String code);
 
+    /** 查询某部影片的全部磁力链接。 */
+    List<JavbusApiMagnet> findMagnetsByCode(@Param("code") String code);
+
+    /** 保存磁力链接到单独表（code + magnet + 插入日期）。 */
+    int insertMagnetSave(@Param("code") String code, @Param("magnet") String magnet);
+
     // ---------- 实体表 ----------
 
     /** 插入或更新演员（按 id 去重）。 */

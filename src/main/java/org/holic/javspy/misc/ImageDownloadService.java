@@ -5,14 +5,16 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.conn.DefaultSchemePortResolver;
-import org.apache.http.impl.conn.ProxySelectorRoutePlanner;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 
+import javax.annotation.PostConstruct;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,14 +22,10 @@ import java.nio.file.Paths;
 import java.net.URLDecoder;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.net.ProxySelector;
-import java.net.SocketAddress;
-import java.net.URI;
-import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ImageDownloadService {
@@ -39,6 +37,22 @@ public class ImageDownloadService {
     /** SOCKS5 代理端口 */
     @Value("${conf.javbus-api.proxy-port:0}")
     private int proxyPort;
+
+    private OkHttpClient httpClient;
+
+    @PostConstruct
+    public void initImageHttpClient() {
+        OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT, TimeUnit.MILLISECONDS)
+                .readTimeout(SOCKET_TIMEOUT, TimeUnit.MILLISECONDS)
+                .writeTimeout(SOCKET_TIMEOUT, TimeUnit.MILLISECONDS)
+                .followRedirects(true);
+        if (StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
+            builder.proxy(new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(proxyHost, proxyPort)));
+            System.out.println("图片下载走 SOCKS5 代理: " + proxyHost + ":" + proxyPort);
+        }
+        this.httpClient = builder.build();
+    }
 
     // 图片存储路径
     private static final String IMAGE_STORAGE_PATH = "../pic";
@@ -86,7 +100,7 @@ public class ImageDownloadService {
         boolean downloadSuccess = false;
 
         try {
-            downloadSuccess = downloadImageWithApache(imageUrl, localFilePath, referer);
+            downloadSuccess = downloadImage(imageUrl, localFilePath, referer);
         } catch (Exception e) {
             // 捕获所有异常，包括超时
             System.err.println("下载图片失败（可能是超时）: " + imageUrl);
@@ -103,85 +117,39 @@ public class ImageDownloadService {
     }
 
     /**
-     * 使用Apache HttpClient下载图片
+     * 使用 OkHttp 下载图片（支持 SOCKS5 代理 + Referer 防盗链）。
      */
-    private boolean downloadImageWithApache(String imageUrl, Path savePath, String referer) throws IOException {
-        // 创建HttpClient
-        try (CloseableHttpClient httpClient = buildHttpClient()) {
-
-            // 配置请求
-            RequestConfig requestConfig = RequestConfig.custom()
-                    .setConnectTimeout(CONNECT_TIMEOUT)
-                    .setSocketTimeout(SOCKET_TIMEOUT)
-                    .setConnectionRequestTimeout(CONNECT_TIMEOUT)
-                    .build();
-
-            HttpGet httpGet = new HttpGet(imageUrl);
-            httpGet.setConfig(requestConfig);
-            httpGet.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-            httpGet.setHeader("Accept", "image/webp,image/apng,image/*,*/*;q=0.8");
-            if (referer != null && !referer.trim().isEmpty()) {
-                httpGet.setHeader("Referer", referer);
+    private boolean downloadImage(String imageUrl, Path savePath, String referer) throws IOException {
+        Request.Builder builder = new Request.Builder()
+                .url(imageUrl)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Accept", "image/webp,image/apng,image/*,*/*;q=0.8");
+        if (referer != null && !referer.trim().isEmpty()) {
+            builder.header("Referer", referer);
+        }
+        try (Response response = httpClient.newCall(builder.build()).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP请求失败，状态码: " + response.code());
             }
-
-            // 执行请求
-            try (CloseableHttpResponse response = httpClient.execute(httpGet)) {
-
-                int statusCode = response.getStatusLine().getStatusCode();
-
-                if (statusCode == 200) {
-                    HttpEntity entity = response.getEntity();
-
-                    if (entity != null) {
-                        // 检查内容类型
-                        String contentType = entity.getContentType().getValue();
-                        if (contentType == null || !contentType.startsWith("image/")) {
-                            throw new IOException("不是图片类型: " + contentType);
-                        }
-
-                        // 下载文件
-                        try (InputStream inputStream = entity.getContent();
-                             FileOutputStream outputStream = new FileOutputStream(savePath.toFile())) {
-
-                            byte[] buffer = new byte[4096];
-                            int bytesRead;
-                            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                                outputStream.write(buffer, 0, bytesRead);
-                            }
-                        }
-
-                        return true;
-                    }
-                } else {
-                    throw new IOException("HTTP请求失败，状态码: " + statusCode);
+            ResponseBody body = response.body();
+            if (body == null) {
+                return false;
+            }
+            MediaType mediaType = body.contentType();
+            String contentType = mediaType == null ? null : mediaType.type() + "/" + mediaType.subtype();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw new IOException("不是图片类型: " + contentType);
+            }
+            try (InputStream inputStream = body.byteStream();
+                 FileOutputStream outputStream = new FileOutputStream(savePath.toFile())) {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
                 }
             }
+            return true;
         }
-
-        return false;
-    }
-
-    /** 构建 HttpClient；配置了 SOCKS5 代理时走代理。 */
-    private CloseableHttpClient buildHttpClient() {
-        HttpClientBuilder builder = HttpClients.custom();
-        if (StringUtils.isNotBlank(proxyHost) && proxyPort > 0) {
-            final Proxy proxy = new Proxy(Proxy.Type.SOCKS,
-                    new InetSocketAddress(proxyHost, proxyPort));
-            ProxySelector proxySelector = new ProxySelector() {
-                @Override
-                public List<Proxy> select(URI uri) {
-                    return Collections.singletonList(proxy);
-                }
-
-                @Override
-                public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-                    // ignore
-                }
-            };
-            builder.setRoutePlanner(new ProxySelectorRoutePlanner(
-                    proxySelector, DefaultSchemePortResolver.INSTANCE));
-        }
-        return builder.build();
     }
 
     /**

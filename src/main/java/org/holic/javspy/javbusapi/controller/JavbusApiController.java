@@ -1,6 +1,7 @@
 package org.holic.javspy.javbusapi.controller;
 
 import com.github.pagehelper.PageInfo;
+import org.holic.javspy.javbusapi.model.JavbusApiMagnet;
 import org.holic.javspy.javbusapi.model.JavbusFollowActor;
 import org.holic.javspy.javbusapi.model.JavbusApiScrapeResult;
 import org.holic.javspy.javbusapi.service.JavbusApiService;
@@ -168,6 +169,37 @@ public class JavbusApiController {
             return WebResult.<Boolean>builder()
                     .success(ok).data(ok)
                     .message(ok ? "已取消关注" : "演员不存在").build();
+        } catch (Exception e) {
+            return WebResult.<Boolean>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
+
+    /** 影片磁力列表：GET /javbus-api/magnets?code=SSIS-406 */
+    @GetMapping("/magnets")
+    public WebResult<List<JavbusApiMagnet>> magnets(
+            @org.springframework.web.bind.annotation.RequestParam("code") String code) {
+        try {
+            List<JavbusApiMagnet> magnets = service.magnetsByCode(code);
+            return WebResult.<List<JavbusApiMagnet>>builder()
+                    .success(true).data(magnets)
+                    .message("共 " + magnets.size() + " 条磁力").build();
+        } catch (Exception e) {
+            return WebResult.<List<JavbusApiMagnet>>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
+
+    /** 保存磁力到单独表：POST /javbus-api/magnets/save?code=SSIS-406&magnet=magnet:?xt=... */
+    @org.springframework.web.bind.annotation.PostMapping("/magnets/save")
+    public WebResult<Boolean> saveMagnet(
+            @org.springframework.web.bind.annotation.RequestParam("code") String code,
+            @org.springframework.web.bind.annotation.RequestParam("magnet") String magnet) {
+        try {
+            boolean ok = service.saveMagnet(code, magnet);
+            return WebResult.<Boolean>builder()
+                    .success(ok).data(ok)
+                    .message(ok ? "磁力已保存" : "保存失败").build();
         } catch (Exception e) {
             return WebResult.<Boolean>builder()
                     .success(false).message(e.getMessage()).build();
