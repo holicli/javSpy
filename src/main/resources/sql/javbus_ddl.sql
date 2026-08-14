@@ -1,7 +1,7 @@
 -- ============================================================
 -- javbus 刮削功能建表脚本（手动执行）
 -- 数据库：与项目 datasource 同一个库（默认 avbook）
--- 执行方式：mysql -uroot -p avbook < javbus_ddl.sql
+-- 执行方式：mariadb -uroot -p avbook < javbus_ddl.sql
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS javbus_movie (

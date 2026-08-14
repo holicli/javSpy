@@ -2,7 +2,7 @@
 -- javbus API 刮削功能数据库设计（规范化）
 -- 依据 https://github.com/ovnrain/javbus-api README 的 JSON 结构
 -- 数据库：与项目 datasource 同一个库（默认 avbook）
--- 执行方式：mysql -uroot -p avbook < javbus_api_ddl.sql
+-- 执行方式：mariadb -uroot -p avbook < javbus_api_ddl.sql
 -- ============================================================
 
 -- 1. 影片表
