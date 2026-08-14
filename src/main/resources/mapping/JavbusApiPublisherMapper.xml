@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiPublisherMapper">
+
+    <insert id="upsert">
+        INSERT INTO javbus_publisher (id, name, created_at)
+        VALUES (#{id}, #{name}, NOW())
+        ON DUPLICATE KEY UPDATE name = VALUES(name)
+    </insert>
+</mapper>

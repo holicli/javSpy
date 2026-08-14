@@ -3,8 +3,11 @@ package org.holic.javspy.misc;
 import com.alibaba.fastjson.JSON;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.io.DataInput;
 import java.io.IOException;
@@ -13,6 +16,7 @@ import java.net.URL;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Component
 public class EmbyMovieChecker {
 
     private final String serverUrl;
@@ -28,7 +32,8 @@ public class EmbyMovieChecker {
      * @param serverUrl Emby服务器地址，例如：http://192.168.1.100:8096
      * @param apiKey Emby API密钥
      */
-    public EmbyMovieChecker(String serverUrl, String apiKey) {
+    public EmbyMovieChecker(@Value("${conf.emby.serverUrl:}") String serverUrl,
+                            @Value("${conf.emby.apiKey:}") String apiKey) {
         this.serverUrl = serverUrl;
         this.apiKey = apiKey;
     }
@@ -167,42 +172,42 @@ public class EmbyMovieChecker {
      * 获取所有影片
      * @return 如果存在返回true，否则返回false
      */
-//    public List<String> getAllMovieFromEmby() {
-//        List<String> names = new ArrayList<>();
-//        List<String> dyname = new ArrayList<>();
-//        try {
-//            // 构建API请求URL /emby/Items?Recursive=true&IncludeItemTypes=Movie
-//            String apiUrl = String.format("%s/emby/Items?IncludeItemTypes=Movie&Recursive=true&api_key=%s",
-//                    serverUrl, apiKey);
-//
-//            // 发送HTTP请求
-//            String response = sendGetRequest(apiUrl);
-//
-//            // 解析JSON响应
-//            JSONObject jsonResponse = new JSONObject(response);
-//            JSONArray items = jsonResponse.getJSONArray("Items");
-//
-//
+    public List<String> getAllMovieFromEmby() {
+        List<String> names = new ArrayList<>();
+        List<String> dyname = new ArrayList<>();
+        try {
+            // 构建API请求URL /emby/Items?Recursive=true&IncludeItemTypes=Movie
+            String apiUrl = String.format("%s/emby/Items?IncludeItemTypes=Movie&Recursive=true&Limit=100000&api_key=%s",
+                    serverUrl, apiKey);
+
+            // 发送HTTP请求
+            String response = sendGetRequest(apiUrl);
+
+            // 解析JSON响应
+            JSONObject jsonResponse = new JSONObject(response);
+            JSONArray items = jsonResponse.getJSONArray("Items");
+
+
 //            List<MediaItem> mediaItemList = JSON.parseArray(items.toString(), MediaItem.class);
-//            // 检查是否有匹配的影片
-//            for (int i = 0; i < items.length(); i++) {
-//                JSONObject item = items.getJSONObject(i);
-//                String itemName = item.getString("Name");
-//                String strBeforeSpace = getStrBeforeSpace(itemName);
-//                if (names.contains(strBeforeSpace)) {
-//                    dyname.add(strBeforeSpace);
-//                } else {
-//                    names.add(strBeforeSpace);
-//                }
-//
-//            }
-//            return names;
-//
-//        } catch (Exception e) {
-//            System.err.println("检查影片时出错: " + e.getMessage());
-//            return null;
-//        }
-//    }
+            // 检查是否有匹配的影片
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.getJSONObject(i);
+                String itemName = item.getString("Name");
+                String strBeforeSpace = getStrBeforeSpace(itemName);
+                if (names.contains(strBeforeSpace)) {
+                    dyname.add(strBeforeSpace);
+                } else {
+                    names.add(strBeforeSpace);
+                }
+
+            }
+            return names;
+
+        } catch (Exception e) {
+            System.err.println("检查影片时出错: " + e.getMessage());
+            return null;
+        }
+    }
 
     public String getStrBeforeSpace(String str){
         int firstSpaceIndex = str.indexOf(' ');
@@ -214,6 +219,26 @@ public class EmbyMovieChecker {
             return str;
         }
     }
+
+    /**
+     * 获取 Emby 中全部影片番号集合；配置缺失或请求失败时返回空集合。
+     */
+    public Set<String> getAllMovieCodes() {
+        if (StringUtils.isBlank(serverUrl) || StringUtils.isBlank(apiKey)) {
+            return Collections.emptySet();
+        }
+        Set<String> codes = new HashSet<>();
+        List<String> names = getAllMovieFromEmby();
+        if (names != null) {
+            for (String name : names) {
+                if (StringUtils.isNotBlank(name)) {
+                    codes.add(name.trim().toUpperCase());
+                }
+            }
+        }
+        return codes;
+    }
+
     /**
      * 示例使用方法
      */
@@ -223,15 +248,15 @@ public class EmbyMovieChecker {
         String apiKey = "bd87f9a3632e4e409314ae45f71d99db";
 
         EmbyMovieChecker checker = new EmbyMovieChecker(serverUrl, apiKey);
-//        List<String> allMovieFromEmby = checker.getAllMovieFromEmby();
-//        System.out.println(allMovieFromEmby);
-//        List<String> lists = Arrays.asList(new String[]{"ABF-306","ACH-078","ADN-734","HMN-787","JUR-568","JUR-605","JUR-624","MIDA-459","MIDA-462","MIMK-257","NSFS-449","START-451"});
-//        for (String name :lists){
-//            boolean b = checker.checkMovieExistsByName(name);
-//            if (!b){
-//                System.out.println(name);
-//            }
-//        }
+        List<String> allMovieFromEmby = checker.getAllMovieFromEmby();
+        System.out.println(allMovieFromEmby);
+        List<String> lists = Arrays.asList(new String[]{"ABF-306","ACH-078","ADN-734","HMN-787","JUR-568","JUR-605","JUR-624","MIDA-459","MIDA-462","MIMK-257","NSFS-449","START-451"});
+        for (String name :lists){
+            boolean b = checker.checkMovieExistsByName(name);
+            if (!b){
+                System.out.println(name);
+            }
+        }
 
     }
 }

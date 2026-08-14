@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JavBus API 影片</title>
+    <title>JavBus API 最新入库</title>
     <style>
         * { box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
         body { background: #f5f7fa; margin: 0; min-height: 100vh; padding: 2rem 1rem; }
@@ -147,11 +147,10 @@
 <body>
 <div class="container">
     <div class="header">
-        <h2>JavBus API 影片</h2>
+        <h2>JavBus API 最新入库</h2>
         <div class="toolbar">
-            <input type="text" id="keywordInput" placeholder="搜索番号 / 演员 / 关键词">
-            <button type="button" id="searchBtn">搜索</button>
-            <button type="button" id="scrapePageBtn" class="secondary">抓取并入库当前页</button>
+            <button type="button" id="scrapeUntilEmbyBtn" class="secondary">一键刮削</button>
+            <span class="page-info" id="scrapeStatus">未开始</span>
             <span class="page-info" id="pageInfo">第 1 页</span>
         </div>
     </div>
@@ -234,9 +233,63 @@
         const pageSpan = document.getElementById('pageInfo');
         const totalSpan = document.getElementById('totalInfo');
         const container = document.getElementById('scrollTableWrapper');
-        const keywordInput = document.getElementById('keywordInput');
-        const searchBtn = document.getElementById('searchBtn');
-        const scrapePageBtn = document.getElementById('scrapePageBtn');
+        const scrapeUntilEmbyBtn = document.getElementById('scrapeUntilEmbyBtn');
+        const scrapeStatusSpan = document.getElementById('scrapeStatus');
+
+        function pollScrapeStatus() {
+            fetch('/javbus-api/scrape/until-emby/status', {headers: {'Accept': 'application/json'}})
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (!result || result.success === false) return;
+                    const s = result.data || {};
+                    if (s.running) {
+                        scrapeUntilEmbyBtn.disabled = true;
+                        scrapeUntilEmbyBtn.textContent = '刮削中';
+                        scrapeStatusSpan.innerText = '第 ' + (s.page || 0) + ' 页，已入库 ' + (s.count || 0) + ' 部';
+                        setTimeout(pollScrapeStatus, 2000);
+                    } else {
+                        scrapeUntilEmbyBtn.disabled = false;
+                        scrapeUntilEmbyBtn.textContent = '一键刮削';
+                        if (s.stopReason === 'EMBY_MATCH') {
+                            scrapeStatusSpan.innerText = '完成：命中 Emby 影片 ' + (s.stopCode || '');
+                        } else if (s.stopReason === 'EMPTY') {
+                            scrapeStatusSpan.innerText = '完成：无更多数据';
+                        } else if (s.stopReason === 'MAX_PAGES') {
+                            scrapeStatusSpan.innerText = '完成：达到页数上限';
+                        } else if (s.stopReason === 'ERROR') {
+                            scrapeStatusSpan.innerText = '异常：' + (s.message || '');
+                        } else {
+                            scrapeStatusSpan.innerText = '未开始';
+                        }
+                    }
+                })
+                .catch(function () {
+                    scrapeStatusSpan.innerText = '状态获取失败';
+                });
+        }
+
+        scrapeUntilEmbyBtn.addEventListener('click', function () {
+            scrapeUntilEmbyBtn.disabled = true;
+            scrapeUntilEmbyBtn.textContent = '启动中...';
+            scrapeStatusSpan.innerText = '启动中...';
+            fetch('/javbus-api/scrape/until-emby', {method: 'POST', headers: {'Accept': 'application/json'}})
+                .then(function (r) { return r.json(); })
+                .then(function (result) {
+                    if (result && result.success === false) {
+                        alert('启动失败：' + (result.message || '未知错误'));
+                        scrapeUntilEmbyBtn.disabled = false;
+                        scrapeUntilEmbyBtn.textContent = '一键刮削';
+                        return;
+                    }
+                    scrapeStatusSpan.innerText = '任务已启动';
+                    setTimeout(pollScrapeStatus, 1000);
+                })
+                .catch(function (error) {
+                    alert('启动失败：' + error.message);
+                    scrapeUntilEmbyBtn.disabled = false;
+                    scrapeUntilEmbyBtn.textContent = '一键刮削';
+                });
+        });
 
         let currentPage = 1;
         let isLoading = false;
@@ -294,40 +347,22 @@
             isLoading = true;
             loadMoreDiv.innerHTML = '<span class="spinner"></span> 正在加载第 ' + page + ' 页...';
             try {
-                const keyword = keywordInput.value.trim();
-                let url;
-                if (keyword) {
-                    url = '/javbus-api/list?keyword=' + encodeURIComponent(keyword)
-                            + '&pageNum=' + page + '&pageSize=20';
-                } else {
-                    url = '/javbus-api/scrape/page?page=' + page + '&magnet=exist&withDetail=false';
-                }
+                const url = '/javbus-api/newest?pageNum=' + page + '&pageSize=30';
                 const response = await fetch(url, {headers: {'Accept': 'application/json'}});
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const result = await response.json();
                 if (!result || result.success === false) {
                     throw new Error(result && result.message ? result.message : '接口返回失败');
                 }
-                let movies;
-                if (keyword) {
-                    const pageInfo = result.data || {};
-                    movies = (pageInfo.list || []).map(function (m) {
-                        return {
-                            code: m.code, title: m.title, coverUrl: m.coverUrl,
-                            actors: m.actors, duration: m.duration,
-                            releaseDate: m.releaseDate, genres: m.genres,
-                            magnetCount: m.magnetCount, embyExists: m.embyExists
-                        };
-                    });
-                } else {
-                    const data = Array.isArray(result.data) ? result.data : [];
-                    movies = data.map(function (item) {
-                        return {code: item.code, title: item.title, coverUrl: item.coverUrl,
-                            actors: item.actors, duration: item.duration,
-                            releaseDate: item.releaseDate, genres: item.genres,
-                            magnetCount: item.magnetCount, embyExists: item.embyExists};
-                    });
-                }
+                const pageInfo = result.data || {};
+                const movies = (pageInfo.list || []).map(function (m) {
+                    return {
+                        code: m.code, title: m.title, coverUrl: m.coverUrl,
+                        actors: m.actors, duration: m.duration,
+                        releaseDate: m.releaseDate, genres: m.genres,
+                        magnetCount: m.magnetCount, embyExists: m.embyExists
+                    };
+                });
                 pageSpan.innerText = '第 ' + page + ' 页';
                 if (movies.length === 0) {
                     hasMore = false;
@@ -364,44 +399,6 @@
                 fetchPage(currentPage);
             }
         }
-
-        function resetAndLoad() {
-            currentPage = 1;
-            hasMore = true;
-            total = 0;
-            totalSpan.innerText = '已加载 0 部';
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="10">加载中，请稍候...</td></tr>';
-            fetchPage(1);
-        }
-
-        searchBtn.addEventListener('click', resetAndLoad);
-        keywordInput.addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') {
-                searchBtn.click();
-            }
-        });
-
-        scrapePageBtn.addEventListener('click', function () {
-            scrapePageBtn.disabled = true;
-            scrapePageBtn.textContent = '抓取中...';
-            fetch('/javbus-api/scrape/page?page=' + currentPage + '&magnet=exist&withDetail=true')
-                .then(function (r) { return r.json(); })
-                .then(function (result) {
-                    if (result && result.success) {
-                        alert('抓取完成，共处理 ' + result.data.length + ' 部影片');
-                        resetAndLoad();
-                    } else {
-                        alert('抓取失败：' + (result && result.message ? result.message : '未知错误'));
-                    }
-                })
-                .catch(function (error) {
-                    alert('抓取失败：' + error.message);
-                })
-                .finally(function () {
-                    scrapePageBtn.disabled = false;
-                    scrapePageBtn.textContent = '抓取并入库当前页';
-                });
-        });
 
         let scrollTimer;
         container.addEventListener('scroll', function () {
@@ -677,6 +674,7 @@
             sampleView.classList.remove('show');
         });
 
+        pollScrapeStatus();
         fetchPage(1);
     })();
 </script>

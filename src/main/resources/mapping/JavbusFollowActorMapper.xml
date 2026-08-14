@@ -2,6 +2,12 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusFollowActorMapper">
 
+    <select id="list" resultType="org.holic.javspy.javbusapi.model.JavbusFollowActor">
+        SELECT id, actor_name, remark, created_at
+        FROM javbus_follow_actor
+        ORDER BY created_at DESC, id DESC
+    </select>
+
     <insert id="insertIgnore">
         INSERT IGNORE INTO javbus_follow_actor (actor_name, remark, created_at)
         VALUES (#{actorName}, #{remark}, NOW())

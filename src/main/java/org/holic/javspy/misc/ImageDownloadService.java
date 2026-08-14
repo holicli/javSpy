@@ -22,8 +22,8 @@ import java.nio.file.Paths;
 import java.net.URLDecoder;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -236,19 +236,23 @@ public class ImageDownloadService {
     /**
      * 批量下载图片
      */
-    public Map<String, String> batchDownloadImages(Map<String, String> imageUrlMap) {
-        Map<String, String> results = new HashMap<>();
+    public List<ImageDownloadResult> batchDownloadImages(List<ImageDownloadTask> tasks) {
+        List<ImageDownloadResult> results = new ArrayList<>();
 
-        for (Map.Entry<String, String> entry : imageUrlMap.entrySet()) {
-            String key = entry.getKey();
-            String url = entry.getValue();
-
+        for (ImageDownloadTask task : tasks) {
+            String key = task.getKey();
+            String url = task.getUrl();
+            ImageDownloadResult result = new ImageDownloadResult();
+            result.setKey(key);
             try {
                 String imageUrl = getImageUrl(url, null);
-                results.put(key, imageUrl);
+                result.setSuccess(true);
+                result.setUrl(imageUrl);
             } catch (Exception e) {
-                results.put(key, "下载失败: " + e.getMessage());
+                result.setSuccess(false);
+                result.setMessage("下载失败: " + e.getMessage());
             }
+            results.add(result);
         }
 
         return results;

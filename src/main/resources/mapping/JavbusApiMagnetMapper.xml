@@ -21,6 +21,16 @@
         WHERE code = #{code}
     </select>
 
+    <select id="countByCodes" resultType="org.holic.javspy.javbusapi.model.JavbusApiMagnetCount">
+        SELECT code AS code, COUNT(*) AS cnt
+        FROM javbus_magnet
+        WHERE code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        GROUP BY code
+    </select>
+
     <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMagnet">
         SELECT id, magnet_id AS magnetId, movie_id AS movieId, code,
                link AS magnet, title AS name, is_hd AS hd, size_text AS sizeText,

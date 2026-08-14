@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS javbus_movie (
     updated_at   DATETIME        DEFAULT NULL            COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_javbus_movie_code (code),
-    KEY idx_javbus_movie_release_date (release_date)
+    KEY idx_javbus_movie_release_date (release_date),
+    KEY idx_javbus_movie_created_at (created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 刮削影片信息';
 
 CREATE TABLE IF NOT EXISTS javbus_magnet (

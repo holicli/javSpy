@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS javbus_movie (
     KEY idx_javbus_movie_director (director_id),
     KEY idx_javbus_movie_studio (studio_id),
     KEY idx_javbus_movie_publisher (publisher_id),
-    KEY idx_javbus_movie_series (series_id)
+    KEY idx_javbus_movie_series (series_id),
+    KEY idx_javbus_movie_created_at (created_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 影片信息';
 
 -- 若表已存在，执行以下语句补字段：
@@ -56,7 +57,8 @@ CREATE TABLE IF NOT EXISTS javbus_magnet (
     PRIMARY KEY (id),
     UNIQUE KEY uk_javbus_magnet_link (link(255)),
     KEY idx_javbus_magnet_movie (movie_id),
-    KEY idx_javbus_magnet_code (code)
+    KEY idx_javbus_magnet_code (code),
+    KEY idx_javbus_magnet_code_share (code, share_date, id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 磁力链接';
 
 -- 3. 演员表

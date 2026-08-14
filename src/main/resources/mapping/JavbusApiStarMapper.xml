@@ -41,4 +41,32 @@
         WHERE m.code = #{code}
         ORDER BY ms.star_id ASC
     </select>
+
+    <select id="findStarsByCodes" resultType="org.holic.javspy.javbusapi.model.JavbusApiStarName">
+        SELECT m.code AS code, st.name AS name
+        FROM javbus_movie_star ms
+        JOIN javbus_star st ON st.id = ms.star_id
+        JOIN javbus_movie m ON m.id = ms.movie_id
+        WHERE m.code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY m.code ASC, ms.star_id ASC
+    </select>
+
+    <select id="findById" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
+        SELECT id, name, avatar, birthday, age, height, bust, waistline,
+               hipline, birthplace, hobby, created_at AS createdAt, updated_at AS updatedAt
+        FROM javbus_star
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <insert id="insertMovieStars">
+        INSERT IGNORE INTO javbus_movie_star (movie_id, star_id)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{movieId}, #{item.id})
+        </foreach>
+    </insert>
 </mapper>

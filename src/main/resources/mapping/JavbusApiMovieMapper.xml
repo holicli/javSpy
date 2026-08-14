@@ -8,6 +8,52 @@
         detail_url, gid, uc, raw_json, created_at, updated_at
     </sql>
 
+    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javbus_movie
+        WHERE code = #{code}
+        LIMIT 1
+    </select>
+
+    <select id="findByCodes" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javbus_movie
+        WHERE code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <insert id="insertMovie" parameterType="org.holic.javspy.javbusapi.model.JavbusApiMovie"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO javbus_movie (
+            code, title, cover_url, cover_hd, cover_local, cover_width, cover_height,
+            release_date, duration, director_id, studio_id, publisher_id, series_id,
+            detail_url, gid, uc, raw_json, created_at, updated_at
+        ) VALUES (
+            #{code}, #{title}, #{coverUrl}, #{coverHd}, #{coverLocal}, #{coverWidth}, #{coverHeight},
+            #{releaseDate}, #{duration}, #{directorId}, #{studioId}, #{publisherId}, #{seriesId},
+            #{detailUrl}, #{gid}, #{uc}, #{rawJson}, NOW(), NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            title         = VALUES(title),
+            cover_url     = VALUES(cover_url),
+            cover_hd      = VALUES(cover_hd),
+            cover_local   = VALUES(cover_local),
+            cover_width   = VALUES(cover_width),
+            cover_height  = VALUES(cover_height),
+            release_date  = VALUES(release_date),
+            duration      = VALUES(duration),
+            director_id   = VALUES(director_id),
+            studio_id     = VALUES(studio_id),
+            publisher_id  = VALUES(publisher_id),
+            series_id     = VALUES(series_id),
+            detail_url    = VALUES(detail_url),
+            gid           = VALUES(gid),
+            uc            = VALUES(uc),
+            updated_at    = NOW()
+    </insert>
+
     <select id="searchMovies" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
         SELECT <include refid="allColumns"/>
         FROM javbus_movie
@@ -23,6 +69,12 @@
             </if>
         </where>
         ORDER BY release_date DESC, id DESC
+    </select>
+
+    <select id="searchNewest" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovie">
+        SELECT <include refid="allColumns"/>
+        FROM javbus_movie
+        ORDER BY created_at DESC, id DESC
     </select>
 
     <update id="updateCoverLocal">

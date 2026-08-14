@@ -5,23 +5,45 @@ import com.github.pagehelper.PageInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.holic.javspy.javbusapi.client.JavbusApiClient;
-import org.holic.javspy.javbusapi.mapper.JavbusApiMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiDirectorMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiGenreMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiMagnetMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiMovieMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiMovieSampleMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiPublisherMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiSeriesMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiSimilarMovieMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiStarMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusApiStudioMapper;
+import org.holic.javspy.javbusapi.mapper.JavbusFollowActorMapper;
+import org.holic.javspy.javbusapi.model.JavbusApiGenreName;
 import org.holic.javspy.javbusapi.model.JavbusApiMagnet;
+import org.holic.javspy.javbusapi.model.JavbusApiMagnetCount;
 import org.holic.javspy.javbusapi.model.JavbusApiMovie;
+import org.holic.javspy.javbusapi.model.JavbusApiMovieDetail;
+import org.holic.javspy.javbusapi.model.JavbusApiMovieDisplay;
 import org.holic.javspy.javbusapi.model.JavbusApiMovieSample;
+import org.holic.javspy.javbusapi.model.JavbusApiScrapeItem;
 import org.holic.javspy.javbusapi.model.JavbusApiScrapeResult;
+import org.holic.javspy.javbusapi.model.JavbusApiScrapeStatus;
 import org.holic.javspy.javbusapi.model.JavbusApiStar;
+import org.holic.javspy.javbusapi.model.JavbusApiStarDetail;
+import org.holic.javspy.javbusapi.model.JavbusApiStarName;
 import org.holic.javspy.javbusapi.model.JavbusApiVideoItem;
 import org.holic.javspy.javbusapi.model.JavbusFollowActor;
+import org.holic.javspy.misc.EmbyMovieService;
 import org.holic.javspy.misc.ImageDownloadService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -32,14 +54,58 @@ import java.util.stream.Collectors;
 public class JavbusApiService {
 
     private final JavbusApiClient apiClient;
-    private final JavbusApiMapper javbusApiMapper;
+    private final JavbusApiMovieMapper movieMapper;
+    private final JavbusApiMagnetMapper magnetMapper;
+    private final JavbusApiStarMapper starMapper;
+    private final JavbusApiSimilarMovieMapper similarMovieMapper;
+    private final JavbusApiMovieSampleMapper movieSampleMapper;
+    private final JavbusFollowActorMapper followActorMapper;
+    private final JavbusApiDirectorMapper directorMapper;
+    private final JavbusApiStudioMapper studioMapper;
+    private final JavbusApiPublisherMapper publisherMapper;
+    private final JavbusApiSeriesMapper seriesMapper;
+    private final JavbusApiGenreMapper genreMapper;
     private final ImageDownloadService imageDownloadService;
+    private final EmbyMovieService embyMovieService;
 
-    public JavbusApiService(JavbusApiClient apiClient, JavbusApiMapper javbusApiMapper,
-                            ImageDownloadService imageDownloadService) {
+    /** 后台一键刮削任务线程池（单线程串行执行）。 */
+    private final ExecutorService scrapeExecutor = Executors.newSingleThreadExecutor();
+
+    private volatile boolean scraping = false;
+    private volatile int scrapePage = 0;
+    private volatile int scrapeCount = 0;
+    private volatile String scrapeMessage = "未开始";
+    private volatile String scrapeStopReason = null;
+    private volatile String scrapeStopCode = null;
+
+    public JavbusApiService(JavbusApiClient apiClient,
+                            JavbusApiMovieMapper movieMapper,
+                            JavbusApiMagnetMapper magnetMapper,
+                            JavbusApiStarMapper starMapper,
+                            JavbusApiSimilarMovieMapper similarMovieMapper,
+                            JavbusApiMovieSampleMapper movieSampleMapper,
+                            JavbusFollowActorMapper followActorMapper,
+                            JavbusApiDirectorMapper directorMapper,
+                            JavbusApiStudioMapper studioMapper,
+                            JavbusApiPublisherMapper publisherMapper,
+                            JavbusApiSeriesMapper seriesMapper,
+                            JavbusApiGenreMapper genreMapper,
+                            ImageDownloadService imageDownloadService,
+                            EmbyMovieService embyMovieService) {
         this.apiClient = apiClient;
-        this.javbusApiMapper = javbusApiMapper;
+        this.movieMapper = movieMapper;
+        this.magnetMapper = magnetMapper;
+        this.starMapper = starMapper;
+        this.similarMovieMapper = similarMovieMapper;
+        this.movieSampleMapper = movieSampleMapper;
+        this.followActorMapper = followActorMapper;
+        this.directorMapper = directorMapper;
+        this.studioMapper = studioMapper;
+        this.publisherMapper = publisherMapper;
+        this.seriesMapper = seriesMapper;
+        this.genreMapper = genreMapper;
         this.imageDownloadService = imageDownloadService;
+        this.embyMovieService = embyMovieService;
     }
 
     /**
@@ -68,11 +134,11 @@ public class JavbusApiService {
     /**
      * 按关键词搜索并逐部抓取入库。
      */
-    public List<Map<String, Object>> scrapeByKeyword(String keyword, int pages, String magnet) {
+    public List<JavbusApiScrapeItem> scrapeByKeyword(String keyword, int pages, String magnet) {
         if (StringUtils.isBlank(keyword)) {
             throw new IllegalArgumentException("关键词不能为空");
         }
-        List<Map<String, Object>> summary = new ArrayList<>();
+        List<JavbusApiScrapeItem> summary = new ArrayList<>();
         try {
             for (int page = 1; page <= Math.max(1, pages); page++) {
                 List<JavbusApiVideoItem> items = apiClient.searchMovies(keyword.trim(), page, magnet, null);
@@ -86,9 +152,9 @@ public class JavbusApiService {
             log.info("javbus-api 搜索抓取完成, keyword={}, total={}", keyword, summary.size());
         } catch (Exception e) {
             log.error("javbus-api 搜索失败, keyword={}", keyword, e);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("status", "FAILED");
-            row.put("message", e.getMessage());
+            JavbusApiScrapeItem row = new JavbusApiScrapeItem();
+            row.setStatus("FAILED");
+            row.setMessage(e.getMessage());
             summary.add(row);
         }
         return summary;
@@ -97,15 +163,15 @@ public class JavbusApiService {
     /**
      * 按页抓取列表并逐部入库。
      */
-    public List<Map<String, Object>> scrapeByPage(int page, String magnet, boolean withDetail) {
-        List<Map<String, Object>> summary = new ArrayList<>();
+    public List<JavbusApiScrapeItem> scrapeByPage(int page, String magnet, boolean withDetail) {
+        List<JavbusApiScrapeItem> summary = new ArrayList<>();
         try {
             List<JavbusApiVideoItem> items = apiClient.listMovies(page, magnet, null, null, null);
             log.info("javbus-api 第 {} 页获取到 {} 部影片", page, items.size());
             // 优化：本页第一部影片已入库 -> 整页直接读库展示，不再逐部调 API
             if (!items.isEmpty()
                     && StringUtils.isNotBlank(items.get(0).getCode())
-                    && javbusApiMapper.findByCode(items.get(0).getCode()) != null) {
+                    && movieMapper.findByCode(items.get(0).getCode()) != null) {
                 log.info("javbus-api 第 {} 页第一部影片已入库，整页直接读库展示, code={}",
                         page, items.get(0).getCode());
                 List<String> codes = new ArrayList<>();
@@ -115,11 +181,13 @@ public class JavbusApiService {
                     }
                 }
                 Map<String, JavbusApiMovie> byCode = new java.util.HashMap<>();
-                for (JavbusApiMovie movie : javbusApiMapper.findByCodes(codes)) {
+                for (JavbusApiMovie movie : movieMapper.findByCodes(codes)) {
                     if (movie != null && StringUtils.isNotBlank(movie.getCode())) {
                         byCode.put(movie.getCode(), movie);
                     }
                 }
+                Set<String> embyCodes = embyMovieService.getCodes();
+                Map<String, MovieDisplayData> displayByCode = loadDisplayData(codes);
                 for (JavbusApiVideoItem item : items) {
                     if (item == null || StringUtils.isBlank(item.getCode())) {
                         continue;
@@ -132,20 +200,21 @@ public class JavbusApiService {
                     }
                     // 封面本地缺失时先下载（cover_url 优先，其次 cover_hd）
                     ensureCoverLocal(movie);
-                    Map<String, Object> row = toDisplayRow(movie);
-                    row.put("status", "DB");
+                    JavbusApiScrapeItem row = JavbusApiScrapeItem.fromDisplay(
+                            toDisplayRow(movie, embyCodes, displayByCode));
+                    row.setStatus("DB");
                     summary.add(row);
                 }
                 return summary;
             }
             for (JavbusApiVideoItem item : items) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("code", item.getCode());
-                row.put("title", item.getTitle());
-                row.put("cover", item.getCover());
-                row.put("date", item.getDate());
+                JavbusApiScrapeItem row = new JavbusApiScrapeItem();
+                row.setCode(item.getCode());
+                row.setTitle(item.getTitle());
+                row.setCover(item.getCover());
+                row.setDate(item.getDate());
                 if (withDetail) {
-                    row.put("status", "LIST");
+                    row.setStatus("LIST");
                     summary.add(row);
                     continue;
                 }
@@ -153,73 +222,78 @@ public class JavbusApiService {
             }
         } catch (Exception e) {
             log.error("javbus-api 第 {} 页获取失败", page, e);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("status", "FAILED");
-            row.put("message", e.getMessage());
+            JavbusApiScrapeItem row = new JavbusApiScrapeItem();
+            row.setStatus("FAILED");
+            row.setMessage(e.getMessage());
             summary.add(row);
         }
         return summary;
     }
 
     /** 抓取单部影片详情+磁力并入库，返回结果行。 */
-    private Map<String, Object> scrapeOne(JavbusApiVideoItem item) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("code", item.getCode());
-        row.put("title", item.getTitle());
+    private JavbusApiScrapeItem scrapeOne(JavbusApiVideoItem item) {
+        JavbusApiScrapeItem row = new JavbusApiScrapeItem();
+        row.setCode(item.getCode());
+        row.setTitle(item.getTitle());
 
         try {
             JavbusApiScrapeResult result = apiClient.scrapeMovie(item.getCode());
             if (result.getMovie() == null) {
-                row.put("status", "FAILED");
-                row.put("message", "详情获取失败");
+                row.setStatus("FAILED");
+                row.setMessage("详情获取失败");
             } else {
                 result.getMovie().setCoverUrl(item.getCover());
                 saveResult(result);
-                row.put("movie", result.getMovie());
-                row.put("actors", result.getMovie().getActors());
-                row.put("duration", result.getMovie().getDuration());
-                row.put("genres", result.getMovie().getGenres());
-                row.put("director", result.getMovie().getDirector());
-                row.put("studio", result.getMovie().getStudio());
-                row.put("series", result.getMovie().getSeries());
-                row.put("start", result.getMovie().getStars());
-                row.put("coverUrl", ImageDownloadService.normalizeAccessUrl(
+                row.setMovie(result.getMovie());
+                row.setActors(result.getMovie().getActors());
+                row.setDuration(result.getMovie().getDuration());
+                row.setGenres(result.getMovie().getGenres());
+                row.setDirector(result.getMovie().getDirector());
+                row.setStudio(result.getMovie().getStudio());
+                row.setSeries(result.getMovie().getSeries());
+                row.setStart(result.getMovie().getStars());
+                row.setCoverUrl(ImageDownloadService.normalizeAccessUrl(
                         result.getMovie().getCoverLocal() != null
                                 ? result.getMovie().getCoverLocal()
                                 : result.getMovie().getCoverUrl()));
-                row.put("HDUrl", result.getMovie().getCoverHd());
-                row.put("releaseDate", result.getMovie().getReleaseDate());
-                row.put("status", "INSERTED");
-                row.put("magnetCount",
-                        result.getMagnets() == null ? 0 : result.getMagnets().size());
+                row.setHDUrl(result.getMovie().getCoverHd());
+                row.setReleaseDate(result.getMovie().getReleaseDate());
+                row.setStatus("INSERTED");
+                row.setMagnetCount(result.getMagnets() == null ? 0 : result.getMagnets().size());
             }
         } catch (Exception e) {
             log.error("javbus-api 抓取失败, code={}", item.getCode(), e);
-            row.put("status", "FAILED");
-            row.put("message", e.getMessage());
+            row.setStatus("FAILED");
+            row.setMessage(e.getMessage());
         }
         return row;
     }
 
     /**
-     * 分页查询已入库的影片（展示用：带演员/类别/导演/片商名称 + 磁力数量）。
+     * 分页查询已入库的影片（展示用：带演员/类别/导演/片商名称 + 磁力数量 + Emby 状态）。
      */
-    public PageInfo<Map<String, Object>> searchMovies(String code, String keyword,
-                                                      String releaseDate, int pageNum, int pageSize) {
+    public PageInfo<JavbusApiMovieDisplay> searchMovies(String code, String keyword,
+                                                        String releaseDate, int pageNum, int pageSize) {
         int safePage = Math.max(1, pageNum);
         int safeSize = Math.min(Math.max(1, pageSize), 100);
         PageHelper.startPage(safePage, safeSize);
-        List<JavbusApiMovie> list = javbusApiMapper.searchMovies(
+        List<JavbusApiMovie> list = movieMapper.searchMovies(
                 StringUtils.trimToNull(code),
                 StringUtils.trimToNull(keyword),
                 StringUtils.trimToNull(releaseDate));
         PageInfo<JavbusApiMovie> pageInfo = new PageInfo<>(list);
 
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<String> codes = list.stream()
+                .map(JavbusApiMovie::getCode)
+                .collect(Collectors.toList());
+        Set<String> embyCodes = embyMovieService.getCodes();
+        Map<String, MovieDisplayData> displayByCode = loadDisplayData(codes);
+        List<JavbusApiMovieDisplay> rows = new ArrayList<>();
         for (JavbusApiMovie movie : list) {
-            rows.add(toDisplayRow(movie));
+            ensureCoverLocal(movie);
+            rows.add(toDisplayRow(movie, embyCodes, displayByCode));
         }
-        PageInfo<Map<String, Object>> result = new PageInfo<>(rows);
+        PageInfo<JavbusApiMovieDisplay> result = new PageInfo<>(rows);
         result.setTotal(pageInfo.getTotal());
         result.setPageNum(pageInfo.getPageNum());
         result.setPageSize(pageInfo.getPageSize());
@@ -227,32 +301,108 @@ public class JavbusApiService {
         return result;
     }
 
-    /** 影片 -> 展示行：join 出导演/制作商/发行商/系列名称 + 演员/类别 + 磁力数量。 */
-    private Map<String, Object> toDisplayRow(JavbusApiMovie movie) {
-        List<JavbusApiStar> starList = javbusApiMapper.findStarsByCode(movie.getCode());
-        String stars = starList.stream()
+    /**
+     * 分页查询最新入库的影片（按 created_at 倒序，每页最多 30 部）。
+     */
+    public PageInfo<JavbusApiMovieDisplay> newestMovies(int pageNum, int pageSize) {
+        int safePage = Math.max(1, pageNum);
+        int safeSize = Math.min(Math.max(1, pageSize), 30);
+        PageHelper.startPage(safePage, safeSize);
+        List<JavbusApiMovie> list = movieMapper.searchNewest();
+        PageInfo<JavbusApiMovie> pageInfo = new PageInfo<>(list);
+
+        List<String> codes = list.stream()
+                .map(JavbusApiMovie::getCode)
+                .collect(Collectors.toList());
+        Set<String> embyCodes = embyMovieService.getCodes();
+        Map<String, MovieDisplayData> displayByCode = loadDisplayData(codes);
+        List<JavbusApiMovieDisplay> rows = new ArrayList<>();
+        for (JavbusApiMovie movie : list) {
+            ensureCoverLocal(movie);
+            rows.add(toDisplayRow(movie, embyCodes, displayByCode));
+        }
+        PageInfo<JavbusApiMovieDisplay> result = new PageInfo<>(rows);
+        result.setTotal(pageInfo.getTotal());
+        result.setPageNum(pageInfo.getPageNum());
+        result.setPageSize(pageInfo.getPageSize());
+        result.setPages(pageInfo.getPages());
+        return result;
+    }
+
+    /** 影片 -> 展示行：单部影片查询演员/类别/磁力数量。 */
+    private JavbusApiMovieDisplay toDisplayRow(JavbusApiMovie movie, Set<String> embyCodes) {
+        String code = movie.getCode();
+        String stars = starMapper.findStarsByCode(code).stream()
                 .map(JavbusApiStar::getName)
                 .collect(Collectors.joining(","));
+        String genres = String.join(",", genreMapper.findByMovieCode(code));
+        int magnetCount = magnetMapper.countByCode(code);
+        return buildDisplayRow(movie, embyCodes, stars, genres, magnetCount);
+    }
 
-        List<String> genreByCode = javbusApiMapper.findGenreByCode(movie.getCode());
-        String genres = String.join(",", genreByCode);
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("code", movie.getCode());
-        row.put("title", movie.getTitle());
-        row.put("coverUrl", ImageDownloadService.normalizeAccessUrl(movie.getCoverLocal()));
-        row.put("coverHd", movie.getCoverHd());
-        row.put("releaseDate", movie.getReleaseDate());
-        row.put("duration", movie.getDuration());
-        row.put("director", movie.getDirector());
-        row.put("studio", movie.getStudio());
-        row.put("publisher", movie.getPublisher());
-        row.put("series", movie.getSeries());
-        row.put("genres",genres);
-        row.put("actors", stars);
-        row.put("gid", movie.getGid());
-        row.put("uc", movie.getUc());
-        row.put("magnetCount", javbusApiMapper.countMagnetsByCode(movie.getCode()));
-        return row;
+    /** 影片 -> 展示行：使用整页预查询结果，不在循环内执行 SQL。 */
+    private JavbusApiMovieDisplay toDisplayRow(JavbusApiMovie movie, Set<String> embyCodes,
+                                               Map<String, MovieDisplayData> displayByCode) {
+        MovieDisplayData data = displayByCode.get(movie.getCode());
+        String stars = data == null ? "" : data.stars;
+        String genres = data == null ? "" : data.genres;
+        int magnetCount = data == null ? 0 : data.magnetCount;
+        return buildDisplayRow(movie, embyCodes, stars, genres, magnetCount);
+    }
+
+    private JavbusApiMovieDisplay buildDisplayRow(JavbusApiMovie movie, Set<String> embyCodes,
+                                                  String stars, String genres, int magnetCount) {
+        JavbusApiMovieDisplay display = new JavbusApiMovieDisplay();
+        display.setCode(movie.getCode());
+        display.setTitle(movie.getTitle());
+        display.setCoverUrl(ImageDownloadService.normalizeAccessUrl(movie.getCoverLocal()));
+        display.setCoverHd(movie.getCoverHd());
+        display.setReleaseDate(movie.getReleaseDate());
+        display.setDuration(movie.getDuration());
+        display.setDirector(movie.getDirector());
+        display.setStudio(movie.getStudio());
+        display.setPublisher(movie.getPublisher());
+        display.setSeries(movie.getSeries());
+        display.setGenres(genres);
+        display.setActors(stars);
+        display.setGid(movie.getGid());
+        display.setUc(movie.getUc());
+        display.setMagnetCount(magnetCount);
+        display.setEmbyExists(embyCodes != null
+                && embyCodes.contains(movie.getCode().trim().toUpperCase()));
+        return display;
+    }
+
+    /** 整页预查询展示数据：演员/类别/磁力数量一次查齐，按番号聚合。 */
+    private Map<String, MovieDisplayData> loadDisplayData(List<String> codes) {
+        Map<String, MovieDisplayData> result = new HashMap<>();
+        if (codes == null || codes.isEmpty()) {
+            return result;
+        }
+        for (JavbusApiStarName row : starMapper.findStarsByCodes(codes)) {
+            MovieDisplayData data = result.computeIfAbsent(row.getCode(), k -> new MovieDisplayData());
+            if (StringUtils.isNotBlank(row.getName())) {
+                data.stars = data.stars.isEmpty() ? row.getName() : data.stars + "," + row.getName();
+            }
+        }
+        for (JavbusApiGenreName row : genreMapper.findByCodes(codes)) {
+            MovieDisplayData data = result.computeIfAbsent(row.getCode(), k -> new MovieDisplayData());
+            if (StringUtils.isNotBlank(row.getName())) {
+                data.genres = data.genres.isEmpty() ? row.getName() : data.genres + "," + row.getName();
+            }
+        }
+        for (JavbusApiMagnetCount row : magnetMapper.countByCodes(codes)) {
+            MovieDisplayData data = result.computeIfAbsent(row.getCode(), k -> new MovieDisplayData());
+            data.magnetCount = row.getCnt() == null ? 0 : row.getCnt().intValue();
+        }
+        return result;
+    }
+
+    /** 整页展示数据的聚合实体。 */
+    private static class MovieDisplayData {
+        private String stars = "";
+        private String genres = "";
+        private int magnetCount;
     }
 
     /**
@@ -271,23 +421,23 @@ public class JavbusApiService {
 
         // 1. 实体表
         if (StringUtils.isNotBlank(movie.getDirectorId()) && StringUtils.isNotBlank(movie.getDirector())) {
-            javbusApiMapper.upsertDirector(movie.getDirectorId(), movie.getDirector());
+            directorMapper.upsert(movie.getDirectorId(), movie.getDirector());
         }
         if (StringUtils.isNotBlank(movie.getStudioId()) && StringUtils.isNotBlank(movie.getStudio())) {
-            javbusApiMapper.upsertStudio(movie.getStudioId(), movie.getStudio());
+            studioMapper.upsert(movie.getStudioId(), movie.getStudio());
         }
         if (StringUtils.isNotBlank(movie.getPublisherId()) && StringUtils.isNotBlank(movie.getPublisher())) {
-            javbusApiMapper.upsertPublisher(movie.getPublisherId(), movie.getPublisher());
+            publisherMapper.upsert(movie.getPublisherId(), movie.getPublisher());
         }
         if (StringUtils.isNotBlank(movie.getSeriesId()) && StringUtils.isNotBlank(movie.getSeries())) {
-            javbusApiMapper.upsertSeries(movie.getSeriesId(), movie.getSeries());
+            seriesMapper.upsert(movie.getSeriesId(), movie.getSeries());
         }
         if (movie.getStars() != null && !movie.getStars().isEmpty()) {
-            javbusApiMapper.upsertStars(movie.getStars());
+            starMapper.upsertBatch(movie.getStars());
         }
         if (movie.getGenresList() != null && !movie.getGenresList().isEmpty()) {
             for (JavbusApiStar genre : movie.getGenresList()) {
-                javbusApiMapper.upsertGenre(genre.getId(), genre.getName());
+                genreMapper.upsert(genre.getId(), genre.getName());
             }
         }
 
@@ -295,7 +445,7 @@ public class JavbusApiService {
         Date now = new Date();
         movie.setCreatedAt(now);
         movie.setUpdatedAt(now);
-        javbusApiMapper.insertMovie(movie);
+        movieMapper.insertMovie(movie);
 
         // 2.1 下载封面到本地并回写 cover_local（带 javbus Referer 绕过防盗链）
         downloadCoverToLocal(movie);
@@ -306,22 +456,22 @@ public class JavbusApiService {
                 magnet.setMovieId(movie.getId());
                 magnet.setCode(movie.getCode());
             }
-            javbusApiMapper.insertMagnets(result.getMagnets());
+            magnetMapper.insertBatch(result.getMagnets());
         }
 
         // 4. 关联表
         if (movie.getId() != null) {
             if (movie.getStars() != null && !movie.getStars().isEmpty()) {
-                javbusApiMapper.insertMovieStars(movie.getId(), movie.getStars());
+                starMapper.insertMovieStars(movie.getId(), movie.getStars());
             }
             if (movie.getGenresList() != null && !movie.getGenresList().isEmpty()) {
-                javbusApiMapper.insertMovieGenres(movie.getId(), movie.getGenresList());
+                genreMapper.insertMovieGenres(movie.getId(), movie.getGenresList());
             }
             if (movie.getSamples() != null && !movie.getSamples().isEmpty()) {
-                javbusApiMapper.insertMovieSamples(movie.getId(), movie.getSamples());
+                movieSampleMapper.insertBatch(movie.getId(), movie.getSamples());
             }
             if (movie.getSimilarMovies() != null && !movie.getSimilarMovies().isEmpty()) {
-                javbusApiMapper.insertMovieSimilars(movie.getId(), movie.getSimilarMovies());
+                similarMovieMapper.insertBatch(movie.getId(), movie.getSimilarMovies());
             }
         }
     }
@@ -343,7 +493,7 @@ public class JavbusApiService {
                     remote, fileName, "https://www.javbus.com/");
             if (StringUtils.isNotBlank(localUrl)) {
                 movie.setCoverLocal(localUrl);
-                javbusApiMapper.updateCoverLocal(movie.getCode(), localUrl);
+                movieMapper.updateCoverLocal(movie.getCode(), localUrl);
                 log.info("javbus-api 封面已下载到本地, code={}, local={}", movie.getCode(), localUrl);
             }
         } catch (Exception e) {
@@ -366,35 +516,35 @@ public class JavbusApiService {
     }
 
     /**
-     * 影片详情展示：基本信息 + 演员 + 预览图。
+     * 影片详情展示：基本信息 + 演员 + 预览图 + Emby 状态。
      */
-    public Map<String, Object> movieDetail(String code) {
+    public JavbusApiMovieDetail movieDetail(String code) {
         if (StringUtils.isBlank(code)) {
             throw new IllegalArgumentException("番号不能为空");
         }
         String c = code.trim().toUpperCase();
-        JavbusApiMovie movie = javbusApiMapper.findByCode(c);
-        Map<String, Object> detail = new LinkedHashMap<>();
+        JavbusApiMovie movie = movieMapper.findByCode(c);
+        JavbusApiMovieDetail detail = new JavbusApiMovieDetail();
+        detail.setCode(c);
         if (movie == null) {
-            detail.put("code", c);
-            detail.put("found", false);
+            detail.setFound(false);
             return detail;
         }
-        detail.put("found", true);
-        detail.put("movie", toDisplayRow(movie));
-        detail.put("stars", javbusApiMapper.findStarsByCode(c));
-        detail.put("samples", javbusApiMapper.findSamplesByCode(c));
+        detail.setFound(true);
+        detail.setMovie(toDisplayRow(movie, embyMovieService.getCodes()));
+        detail.setStars(starMapper.findStarsByCode(c));
+        detail.setSamples(movieSampleMapper.findByCode(c));
         return detail;
     }
 
     /**
      * 演员详情：先查本地表，查不到时尝试从 javbus API 拉取并入库。
      */
-    public Map<String, Object> starDetail(String starId, String type) {
+    public JavbusApiStarDetail starDetail(String starId, String type) {
         if (StringUtils.isBlank(starId)) {
             throw new IllegalArgumentException("演员 ID 不能为空");
         }
-        JavbusApiStar star = javbusApiMapper.findStarById(starId.trim());
+        JavbusApiStar star = starMapper.findById(starId.trim());
         if (star == null) {
             try {
                 com.alibaba.fastjson.JSONObject remote = apiClient.getStar(starId.trim(), type);
@@ -412,17 +562,17 @@ public class JavbusApiService {
                     star.setBirthplace(remote.getString("birthplace"));
                     star.setHobby(remote.getString("hobby"));
                     if (StringUtils.isNotBlank(star.getId()) && StringUtils.isNotBlank(star.getName())) {
-                        javbusApiMapper.upsertStar(star);
-                        star = javbusApiMapper.findStarById(star.getId());
+                        starMapper.upsert(star);
+                        star = starMapper.findById(star.getId());
                     }
                 }
             } catch (Exception e) {
                 log.warn("javbus-api 演员详情拉取失败, starId={}", starId, e);
             }
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("star", star);
-        result.put("found", star != null);
+        JavbusApiStarDetail result = new JavbusApiStarDetail();
+        result.setStar(star);
+        result.setFound(star != null);
         return result;
     }
 
@@ -430,7 +580,7 @@ public class JavbusApiService {
      * 查询全部关注演员。
      */
     public List<JavbusFollowActor> listFollowActors() {
-        return javbusApiMapper.listFollowActors();
+        return followActorMapper.list();
     }
 
     /**
@@ -440,7 +590,7 @@ public class JavbusApiService {
         if (StringUtils.isBlank(actorName)) {
             throw new IllegalArgumentException("演员名称不能为空");
         }
-        int rows = javbusApiMapper.insertFollowActor(
+        int rows = followActorMapper.insertIgnore(
                 actorName.trim(), StringUtils.trimToNull(remark));
         return rows > 0;
     }
@@ -452,7 +602,7 @@ public class JavbusApiService {
         if (StringUtils.isBlank(actorName)) {
             throw new IllegalArgumentException("演员名称不能为空");
         }
-        int rows = javbusApiMapper.deleteFollowActor(actorName.trim());
+        int rows = followActorMapper.deleteByName(actorName.trim());
         return rows > 0;
     }
 
@@ -463,7 +613,7 @@ public class JavbusApiService {
         if (StringUtils.isBlank(code)) {
             throw new IllegalArgumentException("番号不能为空");
         }
-        return javbusApiMapper.findMagnetsByCode(code.trim().toUpperCase());
+        return magnetMapper.findByCode(code.trim().toUpperCase());
     }
 
     /**
@@ -476,8 +626,92 @@ public class JavbusApiService {
         if (StringUtils.isBlank(magnet)) {
             throw new IllegalArgumentException("磁力链接不能为空");
         }
-        int rows = javbusApiMapper.insertMagnetSave(
+        int rows = magnetMapper.insertSave(
                 code.trim().toUpperCase(), magnet.trim());
         return rows > 0;
+    }
+
+    /**
+     * 启动后台一键刮削：按页持续抓取 javbus API 详情+磁力+封面入库，
+     * 直到刮到的影片已存在于 Emby 中才停止。
+     */
+    public boolean startScrapeUntilEmby() {
+        synchronized (this) {
+            if (scraping) {
+                return false;
+            }
+            scraping = true;
+            scrapePage = 0;
+            scrapeCount = 0;
+            scrapeMessage = "正在启动...";
+            scrapeStopReason = null;
+            scrapeStopCode = null;
+        }
+        scrapeExecutor.submit(this::scrapeUntilEmbyLoop);
+        return true;
+    }
+
+    /** 后台一键刮削任务状态。 */
+    public JavbusApiScrapeStatus scrapeUntilEmbyStatus() {
+        JavbusApiScrapeStatus status = new JavbusApiScrapeStatus();
+        status.setRunning(scraping);
+        status.setPage(scrapePage);
+        status.setCount(scrapeCount);
+        status.setMessage(scrapeMessage);
+        status.setStopReason(scrapeStopReason);
+        status.setStopCode(scrapeStopCode);
+        return status;
+    }
+
+    /** 后台刮削循环：从第 1 页开始抓取，命中 Emby 已有影片时停止。 */
+    private void scrapeUntilEmbyLoop() {
+        final int maxPages = 500;
+        try {
+            for (int page = 1; page <= maxPages; page++) {
+                scrapePage = page;
+                scrapeMessage = "正在抓取第 " + page + " 页...";
+                // 每页刷新一次 Emby 影片集合，确保用最新数据判断
+                embyMovieService.refresh();
+                List<JavbusApiVideoItem> items = apiClient.listMovies(page, "exist", null, null, null);
+                if (items == null || items.isEmpty()) {
+                    scrapeMessage = "第 " + page + " 页无数据，任务结束";
+                    scrapeStopReason = "EMPTY";
+                    return;
+                }
+                for (JavbusApiVideoItem item : items) {
+                    if (item == null || StringUtils.isBlank(item.getCode())) {
+                        continue;
+                    }
+                    String code = item.getCode().trim().toUpperCase();
+                    scrapeMessage = "正在入库 " + code + " ...";
+                    try {
+                        JavbusApiScrapeResult result = apiClient.scrapeMovie(code);
+                        if (result != null && result.getMovie() != null) {
+                            result.getMovie().setCoverUrl(item.getCover());
+                            saveResult(result);
+                            scrapeCount++;
+                        }
+                    } catch (Exception e) {
+                        log.warn("后台刮削单部失败, code={}", code, e);
+                        scrapeMessage = code + " 抓取失败：" + e.getMessage();
+                        continue;
+                    }
+                    if (embyMovieService.exists(code)) {
+                        scrapeMessage = "命中 Emby 已有影片 " + code + "，任务结束";
+                        scrapeStopReason = "EMBY_MATCH";
+                        scrapeStopCode = code;
+                        return;
+                    }
+                }
+            }
+            scrapeMessage = "已抓取 " + maxPages + " 页仍未命中 Emby，任务结束";
+            scrapeStopReason = "MAX_PAGES";
+        } catch (Exception e) {
+            log.error("后台刮削任务失败", e);
+            scrapeMessage = "任务异常：" + e.getMessage();
+            scrapeStopReason = "ERROR";
+        } finally {
+            scraping = false;
+        }
     }
 }

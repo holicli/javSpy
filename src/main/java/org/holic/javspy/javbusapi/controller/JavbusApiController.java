@@ -2,8 +2,13 @@ package org.holic.javspy.javbusapi.controller;
 
 import com.github.pagehelper.PageInfo;
 import org.holic.javspy.javbusapi.model.JavbusApiMagnet;
-import org.holic.javspy.javbusapi.model.JavbusFollowActor;
+import org.holic.javspy.javbusapi.model.JavbusApiMovieDetail;
+import org.holic.javspy.javbusapi.model.JavbusApiMovieDisplay;
+import org.holic.javspy.javbusapi.model.JavbusApiScrapeItem;
 import org.holic.javspy.javbusapi.model.JavbusApiScrapeResult;
+import org.holic.javspy.javbusapi.model.JavbusApiScrapeStatus;
+import org.holic.javspy.javbusapi.model.JavbusApiStarDetail;
+import org.holic.javspy.javbusapi.model.JavbusFollowActor;
 import org.holic.javspy.javbusapi.service.JavbusApiService;
 import org.holic.javspy.misc.WebResult;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * javbus API 刮削与查询接口。
@@ -51,82 +55,110 @@ public class JavbusApiController {
         }
     }
 
+    /** 启动后台一键刮削直到命中 Emby：POST /javbus-api/scrape/until-emby */
+    @org.springframework.web.bind.annotation.PostMapping("/scrape/until-emby")
+    public WebResult<Boolean> startScrapeUntilEmby() {
+        boolean started = service.startScrapeUntilEmby();
+        return WebResult.<Boolean>builder()
+                .success(true).data(started)
+                .message(started ? "已开始后台刮削" : "刮削任务已在运行").build();
+    }
+
+    /** 后台一键刮削状态：GET /javbus-api/scrape/until-emby/status */
+    @GetMapping("/scrape/until-emby/status")
+    public WebResult<JavbusApiScrapeStatus> scrapeUntilEmbyStatus() {
+        return WebResult.<JavbusApiScrapeStatus>builder()
+                .success(true).data(service.scrapeUntilEmbyStatus())
+                .message("查询成功").build();
+    }
+
     /** 按关键词搜索并逐部入库：GET /javbus-api/scrape/search?keyword=三上&pages=2&magnet=exist */
     @GetMapping("/scrape/search")
-    public WebResult<List<Map<String, Object>>> scrapeByKeyword(
+    public WebResult<List<JavbusApiScrapeItem>> scrapeByKeyword(
             @RequestParam("keyword") String keyword,
             @RequestParam(value = "pages", defaultValue = "1") int pages,
             @RequestParam(value = "magnet", defaultValue = "exist") String magnet) {
         try {
-            List<Map<String, Object>> summary = service.scrapeByKeyword(keyword, pages, magnet);
-            return WebResult.<List<Map<String, Object>>>builder()
+            List<JavbusApiScrapeItem> summary = service.scrapeByKeyword(keyword, pages, magnet);
+            return WebResult.<List<JavbusApiScrapeItem>>builder()
                     .success(true).data(summary)
                     .message("搜索抓取完成，共处理 " + summary.size() + " 部").build();
         } catch (Exception e) {
-            return WebResult.<List<Map<String, Object>>>builder()
+            return WebResult.<List<JavbusApiScrapeItem>>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }
 
     /** 按页抓取列表（默认第 1 页，有磁力）：GET /javbus-api/scrape/page?page=1&magnet=exist&withDetail=true */
     @GetMapping("/scrape/page")
-    public WebResult<List<Map<String, Object>>> scrapePage(
+    public WebResult<List<JavbusApiScrapeItem>> scrapePage(
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "magnet", defaultValue = "exist") String magnet,
             @RequestParam(value = "withDetail", defaultValue = "true") boolean withDetail) {
         try {
-            List<Map<String, Object>> summary = service.scrapeByPage(page, magnet, withDetail);
-            return WebResult.<List<Map<String, Object>>>builder()
+            List<JavbusApiScrapeItem> summary = service.scrapeByPage(page, magnet, withDetail);
+            return WebResult.<List<JavbusApiScrapeItem>>builder()
                     .success(true).data(summary)
                     .message("第 " + page + " 页共处理 " + summary.size() + " 部影片").build();
         } catch (Exception e) {
-            return WebResult.<List<Map<String, Object>>>builder()
+            return WebResult.<List<JavbusApiScrapeItem>>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }
 
     /** 分页查询已入库的影片：GET /javbus-api/list?keyword=SSIS&pageNum=1&pageSize=20 */
     @GetMapping("/list")
-    public WebResult<PageInfo<Map<String, Object>>> list(
+    public WebResult<PageInfo<JavbusApiMovieDisplay>> list(
             @RequestParam(value = "code", required = false) String code,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "releaseDate", required = false) String releaseDate,
             @RequestParam(value = "pageNum", defaultValue = "1") int pageNum,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
-        PageInfo<Map<String, Object>> page = service.searchMovies(
+        PageInfo<JavbusApiMovieDisplay> page = service.searchMovies(
                 code, keyword, releaseDate, pageNum, pageSize);
-        return WebResult.<PageInfo<Map<String, Object>>>builder()
+        return WebResult.<PageInfo<JavbusApiMovieDisplay>>builder()
+                .success(true).data(page)
+                .message("查询成功").build();
+    }
+
+    /** 最新入库影片分页查询：GET /javbus-api/newest?pageNum=1&pageSize=30 */
+    @GetMapping("/newest")
+    public WebResult<PageInfo<JavbusApiMovieDisplay>> newest(
+            @RequestParam(value = "pageNum", defaultValue = "1") int pageNum,
+            @RequestParam(value = "pageSize", defaultValue = "30") int pageSize) {
+        PageInfo<JavbusApiMovieDisplay> page = service.newestMovies(pageNum, pageSize);
+        return WebResult.<PageInfo<JavbusApiMovieDisplay>>builder()
                 .success(true).data(page)
                 .message("查询成功").build();
     }
 
     /** 影片详情（基本信息+演员+预览图）：GET /javbus-api/movie?code=SSIS-406 */
     @GetMapping("/movie")
-    public WebResult<Map<String, Object>> movieDetail(
+    public WebResult<JavbusApiMovieDetail> movieDetail(
             @RequestParam("code") String code) {
         try {
-            Map<String, Object> detail = service.movieDetail(code);
-            return WebResult.<Map<String, Object>>builder()
+            JavbusApiMovieDetail detail = service.movieDetail(code);
+            return WebResult.<JavbusApiMovieDetail>builder()
                     .success(true).data(detail)
                     .message("查询成功").build();
         } catch (Exception e) {
-            return WebResult.<Map<String, Object>>builder()
+            return WebResult.<JavbusApiMovieDetail>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }
 
     /** 演员详情：GET /javbus-api/star?id=2xi&type=normal */
     @GetMapping("/star")
-    public WebResult<Map<String, Object>> starDetail(
+    public WebResult<JavbusApiStarDetail> starDetail(
             @RequestParam("id") String id,
             @RequestParam(value = "type", defaultValue = "normal") String type) {
         try {
-            Map<String, Object> detail = service.starDetail(id, type);
-            return WebResult.<Map<String, Object>>builder()
+            JavbusApiStarDetail detail = service.starDetail(id, type);
+            return WebResult.<JavbusApiStarDetail>builder()
                     .success(true).data(detail)
                     .message("查询成功").build();
         } catch (Exception e) {
-            return WebResult.<Map<String, Object>>builder()
+            return WebResult.<JavbusApiStarDetail>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }

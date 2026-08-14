@@ -14,4 +14,10 @@ public class JavbusApiPageController {
     public String view() {
         return "javbusapi";
     }
+
+    /** 最新入库影片页面：GET /javbus-api/view/newest */
+    @GetMapping("")
+    public String newestView() {
+        return "newest";
+    }
 }

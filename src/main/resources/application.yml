@@ -117,7 +117,7 @@ conf:
         # 可选 token（服务端开启权限校验时使用 j-auth-token 请求头）
         token: ""
         # 代理总开关（默认关）：javbus-api 是局域网服务，直连即可；下载 javbus 图片需要代理时再打开
-        proxy-enabled: false
+        proxy-enabled: true
         # SOCKS5 代理（可选，访问公网 javbus-api 时可能需要）
         proxy-host: 127.0.0.1
         proxy-port: 7890

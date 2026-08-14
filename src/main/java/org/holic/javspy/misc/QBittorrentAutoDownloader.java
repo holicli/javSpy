@@ -275,8 +275,8 @@ public class QBittorrentAutoDownloader {
      * 获取所有种子列表
      * @return 种子信息列表
      */
-    public List<Map<String, Object>> getTorrentList() {
-        List<Map<String, Object>> torrents = new ArrayList<>();
+    public List<QbTorrentInfo> getTorrentList() {
+        List<QbTorrentInfo> torrents = new ArrayList<>();
 
         if (!isAuthenticated) {
             System.err.println("请先登录！");
@@ -305,20 +305,20 @@ public class QBittorrentAutoDownloader {
 
                     for (int i = 0; i < jsonArray.length(); i++) {
                         JSONObject torrent = jsonArray.getJSONObject(i);
-                        Map<String, Object> torrentInfo = new HashMap<>();
+                        QbTorrentInfo torrentInfo = new QbTorrentInfo();
 
-                        torrentInfo.put("hash", torrent.getString("hash"));
-                        torrentInfo.put("name", torrent.getString("name"));
-                        torrentInfo.put("size", torrent.getLong("size"));
-                        torrentInfo.put("progress", torrent.getDouble("progress"));
-                        torrentInfo.put("state", torrent.getString("state"));
-                        torrentInfo.put("dlspeed", torrent.getLong("dlspeed"));
-                        torrentInfo.put("upspeed", torrent.getLong("upspeed"));
-                        torrentInfo.put("ratio", torrent.getDouble("ratio"));
-                        torrentInfo.put("added_on", torrent.getLong("added_on"));
-                        torrentInfo.put("completion_on", torrent.optLong("completion_on", 0));
-                        torrentInfo.put("save_path", torrent.getString("save_path"));
-                        torrentInfo.put("category", torrent.optString("category", ""));
+                        torrentInfo.setHash(torrent.getString("hash"));
+                        torrentInfo.setName(torrent.getString("name"));
+                        torrentInfo.setSize(torrent.getLong("size"));
+                        torrentInfo.setProgress(torrent.getDouble("progress"));
+                        torrentInfo.setState(torrent.getString("state"));
+                        torrentInfo.setDlspeed(torrent.getLong("dlspeed"));
+                        torrentInfo.setUpspeed(torrent.getLong("upspeed"));
+                        torrentInfo.setRatio(torrent.getDouble("ratio"));
+                        torrentInfo.setAddedOn(torrent.getLong("added_on"));
+                        torrentInfo.setCompletionOn(torrent.optLong("completion_on", 0));
+                        torrentInfo.setSavePath(torrent.getString("save_path"));
+                        torrentInfo.setCategory(torrent.optString("category", ""));
 
                         torrents.add(torrentInfo);
                     }
@@ -340,8 +340,8 @@ public class QBittorrentAutoDownloader {
      * @param torrentHash 种子哈希
      * @return 详细信息
      */
-    public Map<String, Object> getTorrentDetails(String torrentHash) {
-        Map<String, Object> details = new HashMap<>();
+    public QbTorrentDetails getTorrentDetails(String torrentHash) {
+        QbTorrentDetails details = new QbTorrentDetails();
 
         if (!isAuthenticated) {
             System.err.println("请先登录！");
@@ -369,23 +369,23 @@ public class QBittorrentAutoDownloader {
                     JSONObject json = new JSONObject(response.toString());
 
                     // 提取详细信息
-                    details.put("hash", torrentHash);
-                    details.put("name", json.optString("name", ""));
-                    details.put("save_path", json.optString("save_path", ""));
-                    details.put("total_size", json.optLong("total_size", 0));
-                    details.put("downloaded", json.optLong("downloaded", 0));
-                    details.put("uploaded", json.optLong("uploaded", 0));
-                    details.put("ratio", json.optDouble("ratio", 0.0));
-                    details.put("seeds", json.optInt("seeds", 0));
-                    details.put("peers", json.optInt("peers", 0));
-                    details.put("dl_speed", json.optLong("dl_speed", 0));
-                    details.put("up_speed", json.optLong("up_speed", 0));
-                    details.put("eta", json.optLong("eta", 0));
-                    details.put("creation_date", json.optLong("creation_date", 0));
-                    details.put("comment", json.optString("comment", ""));
-                    details.put("total_pieces", json.optInt("total_pieces", 0));
-                    details.put("piece_size", json.optLong("piece_size", 0));
-                    details.put("pieces_have", json.optInt("pieces_have", 0));
+                    details.setHash(torrentHash);
+                    details.setName(json.optString("name", ""));
+                    details.setSavePath(json.optString("save_path", ""));
+                    details.setTotalSize(json.optLong("total_size", 0));
+                    details.setDownloaded(json.optLong("downloaded", 0));
+                    details.setUploaded(json.optLong("uploaded", 0));
+                    details.setRatio(json.optDouble("ratio", 0.0));
+                    details.setSeeds(json.optInt("seeds", 0));
+                    details.setPeers(json.optInt("peers", 0));
+                    details.setDlSpeed(json.optLong("dl_speed", 0));
+                    details.setUpSpeed(json.optLong("up_speed", 0));
+                    details.setEta(json.optLong("eta", 0));
+                    details.setCreationDate(json.optLong("creation_date", 0));
+                    details.setComment(json.optString("comment", ""));
+                    details.setTotalPieces(json.optInt("total_pieces", 0));
+                    details.setPieceSize(json.optLong("piece_size", 0));
+                    details.setPiecesHave(json.optInt("pieces_have", 0));
                 }
             }
 
@@ -501,8 +501,8 @@ public class QBittorrentAutoDownloader {
      * 获取全局下载/上传速度
      * @return 速度信息
      */
-    public Map<String, Long> getGlobalSpeed() {
-        Map<String, Long> speeds = new HashMap<>();
+    public QbGlobalSpeed getGlobalSpeed() {
+        QbGlobalSpeed speeds = new QbGlobalSpeed();
 
         if (!isAuthenticated) {
             System.err.println("请先登录！");
@@ -528,10 +528,10 @@ public class QBittorrentAutoDownloader {
                     }
 
                     JSONObject json = new JSONObject(response.toString());
-                    speeds.put("dl_info_speed", json.getLong("dl_info_speed"));
-                    speeds.put("up_info_speed", json.getLong("up_info_speed"));
-                    speeds.put("dl_info_data", json.getLong("dl_info_data"));
-                    speeds.put("up_info_data", json.getLong("up_info_data"));
+                    speeds.setDlInfoSpeed(json.getLong("dl_info_speed"));
+                    speeds.setUpInfoSpeed(json.getLong("up_info_speed"));
+                    speeds.setDlInfoData(json.getLong("dl_info_data"));
+                    speeds.setUpInfoData(json.getLong("up_info_data"));
                 }
             }
 
@@ -601,16 +601,16 @@ public class QBittorrentAutoDownloader {
                 Set<String> completedTorrents = new HashSet<>();
 
                 while (true) {
-                    List<Map<String, Object>> torrents = getTorrentList();
+                    List<QbTorrentInfo> torrents = getTorrentList();
 
-                    for (Map<String, Object> torrent : torrents) {
-                        String hash = (String) torrent.get("hash");
-                        double progress = (Double) torrent.get("progress");
-                        String state = (String) torrent.get("state");
+                    for (QbTorrentInfo torrent : torrents) {
+                        String hash = torrent.getHash();
+                        double progress = torrent.getProgress();
+                        String state = torrent.getState();
 
                         // 检查是否下载完成（进度=1）
                         if (progress >= 1.0 && !completedTorrents.contains(hash)) {
-                            System.out.println("种子下载完成: " + torrent.get("name"));
+                            System.out.println("种子下载完成: " + torrent.getName());
                             completedTorrents.add(hash);
 
                             // 执行回调
@@ -692,10 +692,10 @@ public class QBittorrentAutoDownloader {
                 try {
                     while (isRunning) {
                         // 获取当前活跃下载数
-                        List<Map<String, Object>> activeTorrents = qbt.getTorrentList();
+                        List<QbTorrentInfo> activeTorrents = qbt.getTorrentList();
                         int activeCount = 0;
-                        for (Map<String, Object> torrent : activeTorrents) {
-                            String state = (String) torrent.get("state");
+                        for (QbTorrentInfo torrent : activeTorrents) {
+                            String state = torrent.getState();
                             if (!"paused".equals(state) && !"finished".equals(state)) {
                                 activeCount++;
                             }
@@ -768,7 +768,7 @@ public class QBittorrentAutoDownloader {
             System.out.println("登录成功！");
 
             // 2. 获取当前种子列表
-            List<Map<String, Object>> torrents = downloader.getTorrentList();
+            List<QbTorrentInfo> torrents = downloader.getTorrentList();
             System.out.println("当前种子数量: " + torrents.size());
 
             // 3. 添加磁力链接下载
@@ -793,9 +793,9 @@ public class QBittorrentAutoDownloader {
             }, 30); // 每30秒检查一次
 
             // 7. 获取全局速度
-            Map<String, Long> speeds = downloader.getGlobalSpeed();
-            System.out.println("下载速度: " + speeds.getOrDefault("dl_info_speed", 0L) + " B/s");
-            System.out.println("上传速度: " + speeds.getOrDefault("up_info_speed", 0L) + " B/s");
+            QbGlobalSpeed speeds = downloader.getGlobalSpeed();
+            System.out.println("下载速度: " + speeds.getDlInfoSpeed() + " B/s");
+            System.out.println("上传速度: " + speeds.getUpInfoSpeed() + " B/s");
 
             // 8. 等待一段时间，然后停止管理器
             try {

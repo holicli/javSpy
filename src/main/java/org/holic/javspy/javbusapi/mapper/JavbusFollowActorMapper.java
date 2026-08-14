@@ -5,11 +5,16 @@ import org.apache.ibatis.annotations.Param;
 import org.holic.javspy.javbusapi.model.JavbusFollowActor;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 /**
  * javbus_follow_actor 表 mapper。
  */
 @Repository
 public interface JavbusFollowActorMapper extends BaseMapper<JavbusFollowActor> {
+
+    /** 查询全部关注演员。 */
+    List<JavbusFollowActor> list();
 
     /** 新增关注演员（重名时忽略），返回受影响行数。 */
     int insertIgnore(@Param("actorName") String actorName,
