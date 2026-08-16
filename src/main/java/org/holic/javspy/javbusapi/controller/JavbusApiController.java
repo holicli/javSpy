@@ -55,7 +55,7 @@ public class JavbusApiController {
         }
     }
 
-    /** 启动后台一键刮削直到命中 Emby：POST /javbus-api/scrape/until-emby */
+    /** 启动后台一键刮削直到命中 Emby/数据库已有影片：POST /javbus-api/scrape/until-emby */
     @org.springframework.web.bind.annotation.PostMapping("/scrape/until-emby")
     public WebResult<Boolean> startScrapeUntilEmby() {
         boolean started = service.startScrapeUntilEmby();
@@ -100,6 +100,23 @@ public class JavbusApiController {
             return WebResult.<List<JavbusApiScrapeItem>>builder()
                     .success(true).data(summary)
                     .message("第 " + page + " 页共处理 " + summary.size() + " 部影片").build();
+        } catch (Exception e) {
+            return WebResult.<List<JavbusApiScrapeItem>>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
+
+    /** javbus API 关键字搜索并逐部完整入库（详情+磁力+封面）：GET /javbus-api/search?keyword=三上&page=1&magnet=exist */
+    @GetMapping("/search")
+    public WebResult<List<JavbusApiScrapeItem>> searchFromApi(
+            @RequestParam("keyword") String keyword,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "magnet", defaultValue = "exist") String magnet) {
+        try {
+            List<JavbusApiScrapeItem> items = service.searchFromApi(keyword, page, magnet);
+            return WebResult.<List<JavbusApiScrapeItem>>builder()
+                    .success(true).data(items)
+                    .message("搜索并入库完成，共处理 " + items.size() + " 部").build();
         } catch (Exception e) {
             return WebResult.<List<JavbusApiScrapeItem>>builder()
                     .success(false).message(e.getMessage()).build();

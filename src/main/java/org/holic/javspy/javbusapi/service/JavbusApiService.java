@@ -161,6 +161,28 @@ public class JavbusApiService {
     }
 
     /**
+     * javbus API 关键字搜索并逐部完整入库（详情 + 磁力 + 封面下载），
+     * 返回每部的入库结果行。
+     */
+    public List<JavbusApiScrapeItem> searchFromApi(String keyword, int page, String magnet) {
+        if (StringUtils.isBlank(keyword)) {
+            throw new IllegalArgumentException("关键词不能为空");
+        }
+        List<JavbusApiScrapeItem> summary = new ArrayList<>();
+        try {
+            List<JavbusApiVideoItem> items = apiClient.searchMovies(keyword.trim(), Math.max(1, page), magnet, null);
+            for (JavbusApiVideoItem item : items) {
+                summary.add(scrapeOne(item));
+            }
+            log.info("javbus-api 搜索并入库完成, keyword={}, page={}, total={}", keyword, page, summary.size());
+        } catch (Exception e) {
+            log.error("javbus-api 搜索失败, keyword={}", keyword, e);
+            throw new RuntimeException("javbus-api 搜索失败: " + e.getMessage(), e);
+        }
+        return summary;
+    }
+
+    /**
      * 按页抓取列表并逐部入库。
      */
     public List<JavbusApiScrapeItem> scrapeByPage(int page, String magnet, boolean withDetail) {
@@ -633,7 +655,7 @@ public class JavbusApiService {
 
     /**
      * 启动后台一键刮削：按页持续抓取 javbus API 详情+磁力+封面入库，
-     * 直到刮到的影片已存在于 Emby 中才停止。
+     * 直到刮到的影片已存在于 Emby 或数据库中才停止。
      */
     public boolean startScrapeUntilEmby() {
         synchronized (this) {
@@ -663,7 +685,7 @@ public class JavbusApiService {
         return status;
     }
 
-    /** 后台刮削循环：从第 1 页开始抓取，命中 Emby 已有影片时停止。 */
+    /** 后台刮削循环：从第 1 页开始抓取，命中 Emby 或数据库已有影片时停止。 */
     private void scrapeUntilEmbyLoop() {
         final int maxPages = 500;
         try {
@@ -683,6 +705,19 @@ public class JavbusApiService {
                         continue;
                     }
                     String code = item.getCode().trim().toUpperCase();
+                    // 停止条件：Emby 已有 或 数据库已有（本库已刮过），命中即停，避免重复入库
+                    if (embyMovieService.exists(code)) {
+                        scrapeMessage = "命中 Emby 已有影片 " + code + "，任务结束";
+                        scrapeStopReason = "EMBY_MATCH";
+                        scrapeStopCode = code;
+                        return;
+                    }
+                    if (movieMapper.findByCode(code) != null) {
+                        scrapeMessage = "命中数据库已有影片 " + code + "，任务结束";
+                        scrapeStopReason = "DB_MATCH";
+                        scrapeStopCode = code;
+                        return;
+                    }
                     scrapeMessage = "正在入库 " + code + " ...";
                     try {
                         JavbusApiScrapeResult result = apiClient.scrapeMovie(code);
@@ -694,17 +729,10 @@ public class JavbusApiService {
                     } catch (Exception e) {
                         log.warn("后台刮削单部失败, code={}", code, e);
                         scrapeMessage = code + " 抓取失败：" + e.getMessage();
-                        continue;
-                    }
-                    if (embyMovieService.exists(code)) {
-                        scrapeMessage = "命中 Emby 已有影片 " + code + "，任务结束";
-                        scrapeStopReason = "EMBY_MATCH";
-                        scrapeStopCode = code;
-                        return;
                     }
                 }
             }
-            scrapeMessage = "已抓取 " + maxPages + " 页仍未命中 Emby，任务结束";
+            scrapeMessage = "已抓取 " + maxPages + " 页仍未命中 Emby/数据库，任务结束";
             scrapeStopReason = "MAX_PAGES";
         } catch (Exception e) {
             log.error("后台刮削任务失败", e);
