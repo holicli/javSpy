@@ -10,6 +10,7 @@ import org.holic.javspy.javbusapi.model.JavbusApiScrapeStatus;
 import org.holic.javspy.javbusapi.model.JavbusApiStarDetail;
 import org.holic.javspy.javbusapi.model.JavbusFollowActor;
 import org.holic.javspy.javbusapi.service.JavbusApiService;
+import org.holic.javspy.misc.EmbyMovieService;
 import org.holic.javspy.misc.WebResult;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * javbus API 刮削与查询接口。
@@ -26,9 +28,33 @@ import java.util.List;
 public class JavbusApiController {
 
     private final JavbusApiService service;
+    private final EmbyMovieService embyMovieService;
 
-    public JavbusApiController(JavbusApiService service) {
+    public JavbusApiController(JavbusApiService service,
+                               EmbyMovieService embyMovieService) {
         this.service = service;
+        this.embyMovieService = embyMovieService;
+    }
+
+    /** 手动全量同步 Emby 影片清单到数据库（覆盖更新）：POST /javbus-api/emby/sync */
+    @org.springframework.web.bind.annotation.PostMapping("/emby/sync")
+    public WebResult<Map<String, Object>> embySync() {
+        EmbyMovieService.SyncResult result = embyMovieService.syncNow();
+        Map<String, Object> data = new java.util.LinkedHashMap<>();
+        data.put("success", result.success);
+        data.put("count", result.count);
+        data.put("lastSyncAt", result.lastSyncAt);
+        return WebResult.<Map<String, Object>>builder()
+                .success(result.success).data(data)
+                .message(result.message).build();
+    }
+
+    /** Emby 缓存状态（数量、上次同步时间、是否当日已同步）：GET /javbus-api/emby/status */
+    @GetMapping("/emby/status")
+    public WebResult<Map<String, Object>> embyStatus() {
+        return WebResult.<Map<String, Object>>builder()
+                .success(true).data(embyMovieService.status())
+                .message("查询成功").build();
     }
 
     /** 连通性自检：GET /javbus-api/ping */

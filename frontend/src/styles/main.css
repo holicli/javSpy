@@ -78,6 +78,12 @@ body {
     white-space: nowrap;
 }
 
+/* 已暂存影片的番号标红 */
+.staged-code {
+    color: #dc2626 !important;
+    font-weight: 700;
+}
+
 /* 通用徽标（磁力数 / Emby 状态） */
 .badge {
     display: inline-flex;

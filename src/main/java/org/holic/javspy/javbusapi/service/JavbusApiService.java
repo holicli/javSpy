@@ -692,8 +692,7 @@ public class JavbusApiService {
             for (int page = 1; page <= maxPages; page++) {
                 scrapePage = page;
                 scrapeMessage = "正在抓取第 " + page + " 页...";
-                // 每页刷新一次 Emby 影片集合，确保用最新数据判断
-                embyMovieService.refresh();
+                // Emby 影片集合走数据库缓存（当日同步一次），无需每页刷新
                 List<JavbusApiVideoItem> items = apiClient.listMovies(page, "exist", null, null, null);
                 if (items == null || items.isEmpty()) {
                     scrapeMessage = "第 " + page + " 页无数据，任务结束";

@@ -17,7 +17,7 @@
             </span>
         </div>
         <div class="info">
-            <div class="code">{{ movie.code }}</div>
+            <div class="code" :class="{ 'staged-code': isStaged(movie.code) }">{{ movie.code }}</div>
             <div class="title">{{ movie.title || '—' }}</div>
             <div class="meta">
                 <span>{{ movie.releaseDate || '—' }}</span>
@@ -29,6 +29,8 @@
 </template>
 
 <script setup>
+import { isStaged } from '@/store/staging'
+
 defineProps({
     movie: { type: Object, required: true }
 })

@@ -21,6 +21,13 @@
                 </el-menu-item>
             </el-menu>
             <div class="sidebar-footer">
+                <div class="emby-box">
+                    <el-button link type="info" :loading="embySyncing" @click="onEmbySync">
+                        <el-icon style="margin-right: 4px"><Monitor /></el-icon>
+                        {{ embySyncing ? '同步中...' : '同步 Emby' }}
+                    </el-button>
+                    <div class="emby-text" :title="embyText">{{ embyText }}</div>
+                </div>
                 <el-button link type="info" @click="onPing" :loading="pinging">
                     <el-icon style="margin-right: 4px"><Connection /></el-icon>
                     {{ pingText }}
@@ -41,6 +48,9 @@
             </div>
             <el-button link :loading="pinging" @click="onPing" :title="pingText">
                 <el-icon :size="17"><Connection /></el-icon>
+            </el-button>
+            <el-button link :loading="embySyncing" @click="onEmbySync" :title="embyText">
+                <el-icon :size="17"><Monitor /></el-icon>
             </el-button>
         </header>
         <main class="mobile-main">
@@ -84,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { javbusApi } from '@/api'
 import { stagedCount } from '@/store/staging'
@@ -96,6 +106,52 @@ const isMobile = useMobile()
 const pinging = ref(false)
 const pingText = ref('后端连通性检测')
 const stagingVisible = ref(false)
+
+const embySyncing = ref(false)
+const embyText = ref('Emby 状态加载中...')
+
+/** 时间戳/ISO 字符串 -> "YYYY-MM-DD HH:mm"，空返回 '从未同步'。 */
+function formatDate(v) {
+    if (!v) return '从未同步'
+    const d = new Date(v)
+    if (isNaN(d.getTime())) return String(v)
+    const p = (n) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+async function loadEmbyStatus() {
+    try {
+        const res = await javbusApi.embyStatus()
+        const s = res.data || {}
+        if (!s.enabled) {
+            embyText.value = 'Emby 未启用'
+            return
+        }
+        embyText.value =
+            'Emby ' + (s.count ?? 0) + ' 部 · ' +
+            (s.todaySynced ? '今日已同步' : '上次 ' + formatDate(s.lastSyncAt))
+    } catch (e) {
+        embyText.value = 'Emby 状态未知'
+    }
+}
+
+async function onEmbySync() {
+    if (embySyncing.value) return
+    embySyncing.value = true
+    try {
+        const res = await javbusApi.embySync()
+        if (res.success) {
+            ElMessage.success('Emby 同步完成：' + (res.data?.count ?? 0) + ' 部')
+        } else {
+            ElMessage.error(res.message || '同步失败')
+        }
+        await loadEmbyStatus()
+    } catch (e) {
+        ElMessage.error('Emby 同步失败：' + e.message)
+    } finally {
+        embySyncing.value = false
+    }
+}
 
 async function onPing() {
     pinging.value = true
@@ -111,6 +167,8 @@ async function onPing() {
         pinging.value = false
     }
 }
+
+onMounted(loadEmbyStatus)
 </script>
 
 <style scoped>
@@ -147,6 +205,20 @@ async function onPing() {
 .sidebar-footer {
     padding: 14px 16px;
     border-top: 1px solid #f1f5f9;
+}
+
+.emby-box {
+    margin-bottom: 6px;
+}
+
+.emby-text {
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.4;
+    padding-left: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .main-area {

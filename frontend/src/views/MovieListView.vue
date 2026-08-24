@@ -71,7 +71,12 @@
             </el-table-column>
             <el-table-column label="番号" width="120">
                 <template #default="{ row }">
-                    <span class="code-cell" @click="openDetail(row.code)" style="cursor: pointer">
+                    <span
+                        class="code-cell"
+                        :class="{ 'staged-code': isStaged(row.code) }"
+                        @click="openDetail(row.code)"
+                        style="cursor: pointer"
+                    >
                         {{ row.code }}
                     </span>
                 </template>
@@ -160,6 +165,7 @@ import MovieDetailDialog from '@/components/MovieDetailDialog.vue'
 import MagnetDialog from '@/components/MagnetDialog.vue'
 import MobileMovieCard from '@/components/MobileMovieCard.vue'
 import { useMobile } from '@/composables/useMobile'
+import { isStaged } from '@/store/staging'
 
 const isMobile = useMobile()
 

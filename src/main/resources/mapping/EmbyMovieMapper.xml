@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.holic.javspy.javbusapi.mapper.EmbyMovieMapper">
+
+    <select id="selectAllCodes" resultType="java.lang.String">
+        SELECT code
+        FROM emby_movie
+    </select>
+
+    <select id="selectLastSyncAt" resultType="java.util.Date">
+        SELECT MAX(updated_at)
+        FROM emby_movie
+    </select>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*)
+        FROM emby_movie
+    </select>
+
+    <delete id="deleteAll">
+        DELETE FROM emby_movie
+    </delete>
+
+    <insert id="insertBatch">
+        INSERT INTO emby_movie (code, created_at, updated_at)
+        VALUES
+        <foreach collection="codes" item="c" separator=",">
+            (#{c}, NOW(), NOW())
+        </foreach>
+    </insert>
+</mapper>

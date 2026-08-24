@@ -80,5 +80,13 @@ export const stagedMagnets = staged
 /** 暂存数量。 */
 export const stagedCount = computed(() => staged.value.length)
 
+/** 判断某番号是否已在暂存区（大小写不敏感）。 */
+export function isStaged(code) {
+    if (!code) return false
+    const c = String(code).trim().toUpperCase()
+    if (!c) return false
+    return staged.value.some((m) => m.code && String(m.code).trim().toUpperCase() === c)
+}
+
 /** 回车分割的磁力文本（用于展示/复制）。 */
 export const stagedMagnetText = computed(() => staged.value.map((m) => m.magnet).join('\n'))

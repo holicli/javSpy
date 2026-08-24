@@ -77,7 +77,11 @@ export const javbusApi = {
 
     // 后台一键刮削直到命中 Emby
     startScrapeUntilEmby: () => http.post('/javbus-api/scrape/until-emby'),
-    scrapeUntilEmbyStatus: () => http.get('/javbus-api/scrape/until-emby/status')
+    scrapeUntilEmbyStatus: () => http.get('/javbus-api/scrape/until-emby/status'),
+
+    // Emby 影片清单缓存（数据库）
+    embySync: () => http.post('/javbus-api/emby/sync'),
+    embyStatus: () => http.get('/javbus-api/emby/status')
 }
 
 /** 复制文本到剪贴板（带降级方案）。 */

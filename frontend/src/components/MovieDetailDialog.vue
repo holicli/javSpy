@@ -33,7 +33,10 @@
                         </el-image>
                     </div>
                     <div class="movie-meta">
-                        <div class="meta-row"><span class="meta-label">番号</span>{{ movie.code }}</div>
+                        <div class="meta-row">
+                            <span class="meta-label">番号</span>
+                            <span :class="{ 'staged-code': isStaged(movie.code) }">{{ movie.code }}</span>
+                        </div>
                         <div class="meta-row"><span class="meta-label">标题</span>{{ movie.title || '—' }}</div>
                         <div class="meta-row"><span class="meta-label">发售日期</span>{{ movie.releaseDate || '—' }}</div>
                         <div class="meta-row"><span class="meta-label">时长</span>{{ movie.duration ? movie.duration + ' 分钟' : '—' }}</div>
@@ -107,6 +110,7 @@ import { javbusApi } from '@/api'
 import MagnetDialog from './MagnetDialog.vue'
 import StarDetailDialog from './StarDetailDialog.vue'
 import { useMobile } from '@/composables/useMobile'
+import { isStaged } from '@/store/staging'
 
 const isMobile = useMobile()
 const dialogWidth = computed(() => (isMobile.value ? '96%' : '880px'))
