@@ -26,4 +26,7 @@ public class JavbusApiVideoItem implements Serializable {
 
     /** 标签（高清/字幕/新种） */
     private String tags;
+
+    /** 影片是否已存在于 Emby（由服务层填充） */
+    private boolean embyExists;
 }

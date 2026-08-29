@@ -15,6 +15,10 @@
                     <el-icon><Clock /></el-icon>
                     <span>最新入库</span>
                 </el-menu-item>
+                <el-menu-item index="/star">
+                    <el-icon><User /></el-icon>
+                    <span>演员搜索</span>
+                </el-menu-item>
                 <el-menu-item index="/scrape">
                     <el-icon><MagicStick /></el-icon>
                     <span>刮削中心</span>
@@ -64,6 +68,10 @@
             <router-link to="/newest" class="tab" exact-active-class="tab-active">
                 <el-icon :size="20"><Clock /></el-icon>
                 <span>最新</span>
+            </router-link>
+            <router-link to="/star" class="tab" exact-active-class="tab-active">
+                <el-icon :size="20"><User /></el-icon>
+                <span>演员</span>
             </router-link>
             <router-link to="/scrape" class="tab" exact-active-class="tab-active">
                 <el-icon :size="20"><MagicStick /></el-icon>

@@ -62,6 +62,15 @@
         LIMIT 1
     </select>
 
+    <select id="searchByName" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
+        SELECT id, name, avatar, birthday, age, height, bust, waistline,
+               hipline, birthplace, hobby
+        FROM javbus_star
+        WHERE name LIKE CONCAT('%', #{name}, '%')
+        ORDER BY name ASC
+        LIMIT #{limit}
+    </select>
+
     <insert id="insertMovieStars">
         INSERT IGNORE INTO javbus_movie_star (movie_id, star_id)
         VALUES

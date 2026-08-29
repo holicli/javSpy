@@ -7,6 +7,7 @@ import org.holic.javspy.javbusapi.model.JavbusApiMovieDisplay;
 import org.holic.javspy.javbusapi.model.JavbusApiScrapeItem;
 import org.holic.javspy.javbusapi.model.JavbusApiScrapeResult;
 import org.holic.javspy.javbusapi.model.JavbusApiScrapeStatus;
+import org.holic.javspy.javbusapi.model.JavbusApiStar;
 import org.holic.javspy.javbusapi.model.JavbusApiStarDetail;
 import org.holic.javspy.javbusapi.model.JavbusFollowActor;
 import org.holic.javspy.javbusapi.service.JavbusApiService;
@@ -115,19 +116,23 @@ public class JavbusApiController {
         }
     }
 
-    /** 按页抓取列表（默认第 1 页，有磁力）：GET /javbus-api/scrape/page?page=1&magnet=exist&withDetail=true */
+    /** 按页抓取列表（默认第 1 页，有磁力）：
+     * GET /javbus-api/scrape/page?page=1&magnet=exist&withDetail=true
+     * 返回 {items, hasNextPage, currentPage}。 */
     @GetMapping("/scrape/page")
-    public WebResult<List<JavbusApiScrapeItem>> scrapePage(
+    public WebResult<Map<String, Object>> scrapePage(
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "magnet", defaultValue = "exist") String magnet,
             @RequestParam(value = "withDetail", defaultValue = "true") boolean withDetail) {
         try {
-            List<JavbusApiScrapeItem> summary = service.scrapeByPage(page, magnet, withDetail);
-            return WebResult.<List<JavbusApiScrapeItem>>builder()
-                    .success(true).data(summary)
-                    .message("第 " + page + " 页共处理 " + summary.size() + " 部影片").build();
+            Map<String, Object> data = service.scrapeByPage(page, magnet, withDetail);
+            @SuppressWarnings("unchecked")
+            int size = ((List<JavbusApiScrapeItem>) data.getOrDefault("items", new java.util.ArrayList<>())).size();
+            return WebResult.<Map<String, Object>>builder()
+                    .success(true).data(data)
+                    .message("第 " + page + " 页共处理 " + size + " 部影片").build();
         } catch (Exception e) {
-            return WebResult.<List<JavbusApiScrapeItem>>builder()
+            return WebResult.<Map<String, Object>>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }
@@ -202,6 +207,41 @@ public class JavbusApiController {
                     .message("查询成功").build();
         } catch (Exception e) {
             return WebResult.<JavbusApiStarDetail>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
+
+    /** 按名称搜索演员：GET /javbus-api/stars/search?name=三上&limit=20 */
+    @GetMapping("/stars/search")
+    public WebResult<List<JavbusApiStar>> searchStars(
+            @RequestParam("name") String name,
+            @RequestParam(value = "limit", defaultValue = "20") int limit) {
+        try {
+            List<JavbusApiStar> stars = service.searchStars(name, limit);
+            return WebResult.<List<JavbusApiStar>>builder()
+                    .success(true).data(stars)
+                    .message("共找到 " + stars.size() + " 位演员").build();
+        } catch (Exception e) {
+            return WebResult.<List<JavbusApiStar>>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
+
+    /** 按演员查询影片（实时调用 javbus-api 接口）：
+     * GET /javbus-api/movies/by-star?starId=rsv&page=1&magnet=exist
+     * 返回 {movies, hasNextPage, currentPage}。 */
+    @GetMapping("/movies/by-star")
+    public WebResult<Map<String, Object>> moviesByStar(
+            @RequestParam("starId") String starId,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "magnet", defaultValue = "exist") String magnet) {
+        try {
+            Map<String, Object> data = service.moviesByStar(starId, page, magnet);
+            return WebResult.<Map<String, Object>>builder()
+                    .success(true).data(data)
+                    .message("查询成功").build();
+        } catch (Exception e) {
+            return WebResult.<Map<String, Object>>builder()
                     .success(false).message(e.getMessage()).build();
         }
     }

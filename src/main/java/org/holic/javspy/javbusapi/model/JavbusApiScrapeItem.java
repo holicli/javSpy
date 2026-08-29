@@ -28,6 +28,7 @@ public class JavbusApiScrapeItem {
     private String HDUrl;
     private String releaseDate;
     private int magnetCount;
+    private boolean embyExists;
 
     /** 从列表展示行复制展示字段。 */
     public static JavbusApiScrapeItem fromDisplay(JavbusApiMovieDisplay display) {
@@ -47,6 +48,7 @@ public class JavbusApiScrapeItem {
             item.setHDUrl(display.getCoverHd());
             item.setReleaseDate(display.getReleaseDate());
             item.setMagnetCount(display.getMagnetCount());
+            item.setEmbyExists(display.isEmbyExists());
         }
         return item;
     }

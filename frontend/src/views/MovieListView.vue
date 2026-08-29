@@ -177,6 +177,8 @@ const scrapingPage = ref(false)
 const hasMore = ref(true)
 const currentPage = ref(1)
 const tableRef = ref(null)
+/** 连续空页/无新增页计数（防 javbus-api 重复页导致死循环） */
+const emptyPageCount = ref(0)
 
 const detailVisible = ref(false)
 const detailCode = ref('')
@@ -210,25 +212,40 @@ async function fetchPage(page) {
     loading.value = true
     try {
         let list = []
+        let hasNext = true
         if (isSearchMode.value) {
             // 搜索：直接调 javbus API 搜索并逐部入库
             const res = await javbusApi.searchFromApi(keyword.value.trim(), page, 'exist')
-            list = (res.data || []).map(normalize)
+            const data = res.data
+            if (Array.isArray(data)) {
+                list = data.map(normalize)
+                hasNext = data.length > 0
+            } else {
+                list = (data?.items || []).map(normalize)
+                hasNext = !!data?.hasNextPage
+            }
         } else {
             const res = await javbusApi.scrapePage(page, 'exist', false)
-            list = (res.data || []).map(normalize)
+            const data = res.data || {}
+            list = (data.items || []).map(normalize)
+            // 以 javbus-api 接口的翻页信息为准，接口还有下一页就继续
+            hasNext = !!data.hasNextPage
         }
-        if (list.length === 0) {
+        if (!hasNext) {
             hasMore.value = false
+            return
+        }
+        // 按 code 去重追加
+        const seen = new Set(rows.value.map((r) => r.code))
+        const added = list.filter((r) => r.code && !seen.has(r.code))
+        rows.value.push(...added)
+        if (list.length === 0 || added.length === 0) {
+            // 空页或本页无新增：接口仍说还有下一页，多半是重复页/网络抖动，
+            // 连续 3 页无新增才判定结束，避免误停或死循环
+            emptyPageCount.value += 1
+            if (emptyPageCount.value >= 3) hasMore.value = false
         } else {
-            // 按 code 去重追加
-            const seen = new Set(rows.value.map((r) => r.code))
-            const added = list.filter((r) => r.code && !seen.has(r.code))
-            rows.value.push(...added)
-            if (added.length < list.length) {
-                // 本页都是重复数据，视为已到结尾
-                hasMore.value = false
-            }
+            emptyPageCount.value = 0
         }
     } catch (e) {
         ElMessage.error('加载失败：' + e.message)
@@ -243,6 +260,7 @@ function resetAndLoad() {
     rows.value = []
     currentPage.value = 1
     hasMore.value = true
+    emptyPageCount.value = 0
     fetchPage(1)
 }
 
@@ -265,7 +283,8 @@ async function onScrapePage() {
     scrapingPage.value = true
     try {
         const res = await javbusApi.scrapePage(currentPage.value, 'exist', false)
-        const count = (res.data || []).length
+        const data = res.data || {}
+        const count = (data.items || []).length
         ElMessage.success('当前页处理完成，共 ' + count + ' 部影片')
         resetAndLoad()
     } catch (e) {

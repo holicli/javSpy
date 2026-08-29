@@ -61,6 +61,14 @@ export const javbusApi = {
     // 演员详情
     starDetail: (id, type = 'normal') => http.get('/javbus-api/star', { params: { id, type } }),
 
+    // 演员搜索
+    searchStars: (name, limit = 20) =>
+        http.get('/javbus-api/stars/search', { params: { name, limit } }),
+
+    // 按演员查询影片（实时调用 javbus-api 接口，返回 {movies, hasNextPage}）
+    moviesByStar: (starId, page = 1, magnet = 'exist') =>
+        http.get('/javbus-api/movies/by-star', { params: { starId, page, magnet } }),
+
     // 影片磁力列表
     magnets: (code) => http.get('/javbus-api/magnets', { params: { code } }),
 

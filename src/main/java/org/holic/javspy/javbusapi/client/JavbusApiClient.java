@@ -25,7 +25,9 @@ import java.net.Proxy;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -133,6 +135,57 @@ public class JavbusApiClient {
 
         String json = get(url.toString());
         return parseMovieList(json);
+    }
+
+    /**
+     * 获取影片列表（含翻页信息）：GET /api/movies
+     *
+     * @return {movies: List&lt;JavbusApiVideoItem&gt;, hasNextPage: Boolean, currentPage: Integer}
+     */
+    public Map<String, Object> listMoviesPage(int page, String magnet,
+                                              String filterType, String filterValue, String type)
+            throws Exception {
+        StringBuilder url = new StringBuilder(baseUrl).append("/api/movies");
+        List<String> params = new ArrayList<>();
+        params.add("page=" + Math.max(1, page));
+        if (StringUtils.isNotBlank(magnet)) {
+            params.add("magnet=" + magnet.trim());
+        }
+        if (StringUtils.isNotBlank(filterType)) {
+            params.add("filterType=" + filterType.trim());
+        }
+        if (StringUtils.isNotBlank(filterValue)) {
+            params.add("filterValue=" + filterValue.trim());
+        }
+        if (StringUtils.isNotBlank(type)) {
+            params.add("type=" + type.trim());
+        }
+        url.append("?").append(String.join("&", params));
+
+        Map<String, Object> result = new HashMap<>();
+        List<JavbusApiVideoItem> items = new ArrayList<>();
+        boolean hasNextPage = false;
+        String json = get(url.toString());
+        if (StringUtils.isNotBlank(json)) {
+            JSONObject obj = JSON.parseObject(json);
+            if (obj != null) {
+                if (obj.containsKey("movies")) {
+                    items = parseItems(obj.getJSONArray("movies"));
+                }
+                JSONObject pagination = obj.getJSONObject("pagination");
+                if (pagination != null) {
+                    if (pagination.containsKey("hasNextPage")) {
+                        hasNextPage = pagination.getBooleanValue("hasNextPage");
+                    } else if (pagination.get("nextPage") != null) {
+                        hasNextPage = true;
+                    }
+                }
+            }
+        }
+        result.put("movies", items);
+        result.put("hasNextPage", hasNextPage);
+        result.put("currentPage", Math.max(1, page));
+        return result;
     }
 
     /**
@@ -385,6 +438,15 @@ public class JavbusApiClient {
         if (array == null) {
             log.warn("javbus-api list parse failed, json head={}",
                     json.length() > 200 ? json.substring(0, 200) : json);
+            return items;
+        }
+        return parseItems(array);
+    }
+
+    /** 解析影片数组为列表项。 */
+    private List<JavbusApiVideoItem> parseItems(JSONArray array) {
+        List<JavbusApiVideoItem> items = new ArrayList<>();
+        if (array == null) {
             return items;
         }
         for (int i = 0; i < array.size(); i++) {

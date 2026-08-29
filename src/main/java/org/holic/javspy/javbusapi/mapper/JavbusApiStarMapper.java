@@ -29,6 +29,10 @@ public interface JavbusApiStarMapper extends BaseMapper<JavbusApiStar> {
     /** 按演员 ID 查询演员详情。 */
     JavbusApiStar findById(@Param("id") String id);
 
+    /** 按名称模糊搜索演员（限量返回）。 */
+    List<JavbusApiStar> searchByName(@Param("name") String name,
+                                     @Param("limit") int limit);
+
     /** 插入影片-演员关联。 */
     int insertMovieStars(@Param("movieId") Long movieId,
                          @Param("list") List<JavbusApiStar> stars);

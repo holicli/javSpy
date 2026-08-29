@@ -140,13 +140,14 @@ public class JavbusApiService {
         }
         List<JavbusApiScrapeItem> summary = new ArrayList<>();
         try {
+            Set<String> embyCodes = embyMovieService.getCodes();
             for (int page = 1; page <= Math.max(1, pages); page++) {
                 List<JavbusApiVideoItem> items = apiClient.searchMovies(keyword.trim(), page, magnet, null);
                 if (items.isEmpty()) {
                     break;
                 }
                 for (JavbusApiVideoItem item : items) {
-                    summary.add(scrapeOne(item));
+                    summary.add(scrapeOne(item, embyCodes));
                 }
             }
             log.info("javbus-api 搜索抓取完成, keyword={}, total={}", keyword, summary.size());
@@ -170,9 +171,10 @@ public class JavbusApiService {
         }
         List<JavbusApiScrapeItem> summary = new ArrayList<>();
         try {
+            Set<String> embyCodes = embyMovieService.getCodes();
             List<JavbusApiVideoItem> items = apiClient.searchMovies(keyword.trim(), Math.max(1, page), magnet, null);
             for (JavbusApiVideoItem item : items) {
-                summary.add(scrapeOne(item));
+                summary.add(scrapeOne(item, embyCodes));
             }
             log.info("javbus-api 搜索并入库完成, keyword={}, page={}, total={}", keyword, page, summary.size());
         } catch (Exception e) {
@@ -184,12 +186,20 @@ public class JavbusApiService {
 
     /**
      * 按页抓取列表并逐部入库。
+     * 返回 {items, hasNextPage, currentPage}（hasNextPage 来自 javbus-api 接口翻页信息）。
      */
-    public List<JavbusApiScrapeItem> scrapeByPage(int page, String magnet, boolean withDetail) {
+    public Map<String, Object> scrapeByPage(int page, String magnet, boolean withDetail) {
+        Map<String, Object> result = new HashMap<>();
         List<JavbusApiScrapeItem> summary = new ArrayList<>();
+        boolean hasNextPage = false;
         try {
-            List<JavbusApiVideoItem> items = apiClient.listMovies(page, magnet, null, null, null);
-            log.info("javbus-api 第 {} 页获取到 {} 部影片", page, items.size());
+            Map<String, Object> pageData = apiClient.listMoviesPage(page, magnet, null, null, null);
+            @SuppressWarnings("unchecked")
+            List<JavbusApiVideoItem> items =
+                    (List<JavbusApiVideoItem>) pageData.getOrDefault("movies", new ArrayList<>());
+            hasNextPage = Boolean.TRUE.equals(pageData.get("hasNextPage"));
+            log.info("javbus-api 第 {} 页获取到 {} 部影片, hasNextPage={}", page, items.size(), hasNextPage);
+            Set<String> embyCodes = embyMovieService.getCodes();
             // 优化：本页第一部影片已入库 -> 整页直接读库展示，不再逐部调 API
             if (!items.isEmpty()
                     && StringUtils.isNotBlank(items.get(0).getCode())
@@ -208,7 +218,6 @@ public class JavbusApiService {
                         byCode.put(movie.getCode(), movie);
                     }
                 }
-                Set<String> embyCodes = embyMovieService.getCodes();
                 Map<String, MovieDisplayData> displayByCode = loadDisplayData(codes);
                 for (JavbusApiVideoItem item : items) {
                     if (item == null || StringUtils.isBlank(item.getCode())) {
@@ -227,7 +236,10 @@ public class JavbusApiService {
                     row.setStatus("DB");
                     summary.add(row);
                 }
-                return summary;
+                result.put("items", summary);
+                result.put("hasNextPage", hasNextPage);
+                result.put("currentPage", Math.max(1, page));
+                return result;
             }
             for (JavbusApiVideoItem item : items) {
                 JavbusApiScrapeItem row = new JavbusApiScrapeItem();
@@ -240,7 +252,7 @@ public class JavbusApiService {
                     summary.add(row);
                     continue;
                 }
-                summary.add(scrapeOne(item));
+                summary.add(scrapeOne(item, embyCodes));
             }
         } catch (Exception e) {
             log.error("javbus-api 第 {} 页获取失败", page, e);
@@ -249,14 +261,19 @@ public class JavbusApiService {
             row.setMessage(e.getMessage());
             summary.add(row);
         }
-        return summary;
+        result.put("items", summary);
+        result.put("hasNextPage", hasNextPage);
+        result.put("currentPage", Math.max(1, page));
+        return result;
     }
 
     /** 抓取单部影片详情+磁力并入库，返回结果行。 */
-    private JavbusApiScrapeItem scrapeOne(JavbusApiVideoItem item) {
+    private JavbusApiScrapeItem scrapeOne(JavbusApiVideoItem item, Set<String> embyCodes) {
         JavbusApiScrapeItem row = new JavbusApiScrapeItem();
         row.setCode(item.getCode());
         row.setTitle(item.getTitle());
+        row.setEmbyExists(embyCodes != null && StringUtils.isNotBlank(item.getCode())
+                && embyCodes.contains(item.getCode().trim().toUpperCase()));
 
         try {
             JavbusApiScrapeResult result = apiClient.scrapeMovie(item.getCode());
@@ -349,6 +366,76 @@ public class JavbusApiService {
         result.setPageSize(pageInfo.getPageSize());
         result.setPages(pageInfo.getPages());
         return result;
+    }
+
+    /**
+     * 按名称模糊搜索演员（限量返回，用于演员搜索 tab）。
+     */
+    public List<JavbusApiStar> searchStars(String name, int limit) {
+        if (StringUtils.isBlank(name)) {
+            return new ArrayList<>();
+        }
+        int safeLimit = Math.min(Math.max(1, limit), 50);
+        return starMapper.searchByName(name.trim(), safeLimit);
+    }
+
+    /**
+     * 按演员查询影片：调用 javbus-api 接口实时抓取
+     * （GET /api/movies?filterType=star&filterValue={starId}&magnet={magnet}），
+     * 返回 {movies, hasNextPage, currentPage}，并为每部填充 Emby 状态。
+     */
+    public Map<String, Object> moviesByStar(String starId, int page, String magnet) throws Exception {
+        if (StringUtils.isBlank(starId)) {
+            throw new IllegalArgumentException("演员 ID 不能为空");
+        }
+        Map<String, Object> data = apiClient.listMoviesPage(
+                Math.max(1, page),
+                StringUtils.defaultIfBlank(magnet, "exist"),
+                "star", starId.trim(), null);
+        @SuppressWarnings("unchecked")
+        List<JavbusApiVideoItem> items =
+                (List<JavbusApiVideoItem>) data.getOrDefault("movies", new ArrayList<>());
+        Set<String> embyCodes = embyMovieService.getCodes();
+        for (JavbusApiVideoItem item : items) {
+            if (item == null || StringUtils.isBlank(item.getCode())) {
+                continue;
+            }
+            String code = item.getCode().trim().toUpperCase();
+            item.setEmbyExists(embyCodes.contains(code));
+            // 封面转本地地址（已入库用本地文件，未入库先下载）
+            String localCover = localizeCover(code, item.getCover());
+            if (StringUtils.isNotBlank(localCover)) {
+                item.setCover(localCover);
+            }
+        }
+        return data;
+    }
+
+    /** 把远程封面地址转成本地可访问地址；失败返回 null（保留原远程地址）。 */
+    private String localizeCover(String code, String remoteCover) {
+        if (StringUtils.isBlank(remoteCover)) {
+            return null;
+        }
+        try {
+            // 已入库且本地封面文件存在 -> 直接用
+            JavbusApiMovie movie = movieMapper.findByCode(code);
+            if (movie != null && StringUtils.isNotBlank(movie.getCoverLocal())) {
+                String fileName = ImageDownloadService.extractFileName(movie.getCoverLocal());
+                if (StringUtils.isNotBlank(fileName) && imageDownloadService.checkImageExists(fileName)) {
+                    return ImageDownloadService.normalizeAccessUrl(movie.getCoverLocal());
+                }
+            }
+            // 未入库或本地缺文件 -> 下载封面到本地
+            String fileName = ImageDownloadService.extractFileName(remoteCover);
+            String localUrl = imageDownloadService.getImageUrl(
+                    remoteCover, fileName, "https://www.javbus.com/");
+            if (StringUtils.isNotBlank(localUrl)) {
+                return ImageDownloadService.normalizeAccessUrl(localUrl);
+            }
+        } catch (Exception e) {
+            log.warn("javbus-api 演员影片封面转本地失败, code={}", code, e);
+        }
+        return null;
     }
 
     /** 影片 -> 展示行：单部影片查询演员/类别/磁力数量。 */
