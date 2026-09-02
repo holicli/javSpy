@@ -32,6 +32,13 @@
                     </el-button>
                     <div class="emby-text" :title="embyText">{{ embyText }}</div>
                 </div>
+                <div class="emby-box">
+                    <el-button link type="info" :loading="starSyncing" @click="onStarSync">
+                        <el-icon style="margin-right: 4px"><UserFilled /></el-icon>
+                        {{ starSyncing ? '同步中...' : '同步演员' }}
+                    </el-button>
+                    <div class="emby-text" :title="starSyncText">{{ starSyncText }}</div>
+                </div>
                 <el-button link type="info" @click="onPing" :loading="pinging">
                     <el-icon style="margin-right: 4px"><Connection /></el-icon>
                     {{ pingText }}
@@ -55,6 +62,9 @@
             </el-button>
             <el-button link :loading="embySyncing" @click="onEmbySync" :title="embyText">
                 <el-icon :size="17"><Monitor /></el-icon>
+            </el-button>
+            <el-button link :loading="starSyncing" @click="onStarSync" :title="starSyncText">
+                <el-icon :size="17"><UserFilled /></el-icon>
             </el-button>
         </header>
         <main class="mobile-main">
@@ -102,7 +112,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { javbusApi } from '@/api'
 import { stagedCount } from '@/store/staging'
@@ -117,6 +127,10 @@ const stagingVisible = ref(false)
 
 const embySyncing = ref(false)
 const embyText = ref('Emby 状态加载中...')
+
+const starSyncing = ref(false)
+const starSyncText = ref('演员信息：未同步')
+let starSyncTimer = null
 
 /** 时间戳/ISO 字符串 -> "YYYY-MM-DD HH:mm"，空返回 '从未同步'。 */
 function formatDate(v) {
@@ -161,6 +175,59 @@ async function onEmbySync() {
     }
 }
 
+/** 拉取一次演员同步状态并更新文本。 */
+async function loadStarSyncStatus() {
+    try {
+        const res = await javbusApi.starSyncStatus()
+        const s = res.data || {}
+        if (s.running) {
+            starSyncing.value = true
+            starSyncText.value =
+                `演员同步 ${s.done}/${s.total}（成功 ${s.success} · 失败 ${s.fail}）`
+        } else {
+            starSyncing.value = false
+            if (s.total > 0 && s.lastRunAt) {
+                starSyncText.value = `演员信息：上次 ${formatDate(s.lastRunAt)} · 成功 ${s.success}`
+            } else {
+                starSyncText.value = '演员信息：未同步'
+            }
+            stopStarSyncPolling()
+        }
+    } catch (e) {
+        starSyncText.value = '演员信息：状态未知'
+    }
+}
+
+function startStarSyncPolling() {
+    if (starSyncTimer) return
+    starSyncTimer = setInterval(loadStarSyncStatus, 2000)
+}
+
+function stopStarSyncPolling() {
+    if (starSyncTimer) {
+        clearInterval(starSyncTimer)
+        starSyncTimer = null
+    }
+}
+
+async function onStarSync() {
+    if (starSyncing.value) return
+    try {
+        const res = await javbusApi.starSync()
+        if (res.success) {
+            ElMessage.success('已开始批量同步演员信息')
+            starSyncing.value = true
+            startStarSyncPolling()
+            loadStarSyncStatus()
+        } else {
+            ElMessage.warning(res.message || '未开始同步')
+            loadStarSyncStatus()
+        }
+    } catch (e) {
+        ElMessage.error('启动演员同步失败：' + e.message)
+    }
+}
+
 async function onPing() {
     pinging.value = true
     try {
@@ -176,7 +243,12 @@ async function onPing() {
     }
 }
 
-onMounted(loadEmbyStatus)
+onMounted(() => {
+    loadEmbyStatus()
+    loadStarSyncStatus()
+})
+
+onBeforeUnmount(stopStarSyncPolling)
 </script>
 
 <style scoped>

@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS javbus_magnet (
 CREATE TABLE IF NOT EXISTS javbus_star (
     id         VARCHAR(64)     NOT NULL                COMMENT '演员 ID（API 返回的 id）',
     name       VARCHAR(128)    NOT NULL                COMMENT '演员名称',
-    avatar     VARCHAR(1024)   DEFAULT NULL            COMMENT '头像地址',
+    avatar     VARCHAR(1024)   DEFAULT NULL            COMMENT '头像地址（远程）',
+    avatar_local VARCHAR(1024) DEFAULT NULL            COMMENT '本地头像地址',
     birthday   VARCHAR(32)     DEFAULT NULL            COMMENT '生日 yyyy-MM-dd',
     age        VARCHAR(16)     DEFAULT NULL            COMMENT '年龄',
     height     VARCHAR(32)     DEFAULT NULL            COMMENT '身高',
@@ -79,6 +80,9 @@ CREATE TABLE IF NOT EXISTS javbus_star (
     PRIMARY KEY (id),
     KEY idx_javbus_star_name (name)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'javbus 演员';
+
+-- 若 javbus_star 表已存在，执行以下语句补本地头像字段：
+-- ALTER TABLE javbus_star ADD COLUMN avatar_local VARCHAR(1024) DEFAULT NULL COMMENT '本地头像地址' AFTER avatar;
 
 -- 4. 导演表
 CREATE TABLE IF NOT EXISTS javbus_director (

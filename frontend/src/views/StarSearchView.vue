@@ -30,7 +30,7 @@
                         @click="selectStar(star)"
                     >
                         <el-image
-                            :src="star.avatar"
+                            :src="star.avatarLocal || star.avatar"
                             fit="cover"
                             class="star-avatar"
                             lazy

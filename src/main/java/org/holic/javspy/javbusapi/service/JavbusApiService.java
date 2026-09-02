@@ -71,6 +71,19 @@ public class JavbusApiService {
     /** 后台一键刮削任务线程池（单线程串行执行）。 */
     private final ExecutorService scrapeExecutor = Executors.newSingleThreadExecutor();
 
+    /** 演员批量同步任务线程池（单线程串行执行，避免并发打 javbus-api）。 */
+    private final ExecutorService starSyncExecutor = Executors.newSingleThreadExecutor();
+
+    /** 演员批量同步状态 */
+    private volatile boolean starSyncing = false;
+    private volatile int starSyncTotal = 0;
+    private volatile int starSyncDone = 0;
+    private volatile int starSyncSuccess = 0;
+    private volatile int starSyncFail = 0;
+    private volatile String starSyncMessage = "未开始";
+    private volatile String starSyncCurrentId = null;
+    private volatile long starSyncLastRunAt = 0L;
+
     private volatile boolean scraping = false;
     private volatile int scrapePage = 0;
     private volatile int scrapeCount = 0;
@@ -438,6 +451,36 @@ public class JavbusApiService {
         return null;
     }
 
+    /**
+     * 把演员远程头像地址转成本地可访问地址；失败返回 null（保留原远程头像）。
+     * 优先复用已存在本地文件（按文件名匹配），否则下载。
+     */
+    private String localizeAvatar(String starId, String remoteAvatar) {
+        if (StringUtils.isBlank(remoteAvatar)) {
+            return null;
+        }
+        try {
+            // 已入库且本地头像文件存在 -> 直接用
+            JavbusApiStar star = starMapper.findById(starId);
+            if (star != null && StringUtils.isNotBlank(star.getAvatarLocal())) {
+                String fileName = ImageDownloadService.extractFileName(star.getAvatarLocal());
+                if (StringUtils.isNotBlank(fileName) && imageDownloadService.checkImageExists(fileName)) {
+                    return ImageDownloadService.normalizeAccessUrl(star.getAvatarLocal());
+                }
+            }
+            // 未入库或本地缺文件 -> 下载头像到本地
+            String fileName = ImageDownloadService.extractFileName(remoteAvatar);
+            String localUrl = imageDownloadService.getImageUrl(
+                    remoteAvatar, fileName, "https://www.javbus.com/");
+            if (StringUtils.isNotBlank(localUrl)) {
+                return ImageDownloadService.normalizeAccessUrl(localUrl);
+            }
+        } catch (Exception e) {
+            log.warn("javbus-api 演员头像转本地失败, starId={}", starId, e);
+        }
+        return null;
+    }
+
     /** 影片 -> 展示行：单部影片查询演员/类别/磁力数量。 */
     private JavbusApiMovieDisplay toDisplayRow(JavbusApiMovie movie, Set<String> embyCodes) {
         String code = movie.getCode();
@@ -655,34 +698,143 @@ public class JavbusApiService {
         }
         JavbusApiStar star = starMapper.findById(starId.trim());
         if (star == null) {
-            try {
-                com.alibaba.fastjson.JSONObject remote = apiClient.getStar(starId.trim(), type);
-                if (remote != null) {
-                    star = new JavbusApiStar();
-                    star.setId(remote.getString("id"));
-                    star.setName(remote.getString("name"));
-                    star.setAvatar(remote.getString("avatar"));
-                    star.setBirthday(remote.getString("birthday"));
-                    star.setAge(remote.getString("age"));
-                    star.setHeight(remote.getString("height"));
-                    star.setBust(remote.getString("bust"));
-                    star.setWaistline(remote.getString("waistline"));
-                    star.setHipline(remote.getString("hipline"));
-                    star.setBirthplace(remote.getString("birthplace"));
-                    star.setHobby(remote.getString("hobby"));
-                    if (StringUtils.isNotBlank(star.getId()) && StringUtils.isNotBlank(star.getName())) {
-                        starMapper.upsert(star);
-                        star = starMapper.findById(star.getId());
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("javbus-api 演员详情拉取失败, starId={}", starId, e);
-            }
+            star = fillStarFromRemote(starId.trim(), type);
+        } else {
+            // 已有本地头像文件则优先展示本地，缺失则尝试补下载
+            star = ensureStarAvatarLocal(star);
         }
         JavbusApiStarDetail result = new JavbusApiStarDetail();
         result.setStar(star);
         result.setFound(star != null);
         return result;
+    }
+
+    /**
+     * 确保演员本地头像：已有 avatar_local 且文件存在则用本地地址展示；
+     * 否则尝试从远程 avatar 下载并回写；失败保留远程地址。
+     */
+    private JavbusApiStar ensureStarAvatarLocal(JavbusApiStar star) {
+        if (star == null) {
+            return null;
+        }
+        String local = localizeAvatar(star.getId(), star.getAvatar());
+        if (StringUtils.isNotBlank(local) && !local.equals(star.getAvatarLocal())) {
+            starMapper.updateAvatarLocal(star.getId(), local);
+            star.setAvatarLocal(local);
+        }
+        return star;
+    }
+
+    /**
+     * 从 javbus-api 拉取演员详情并入库，返回完整演员；失败返回 null。
+     * 供「查看详情时自动拉取」和「批量同步」复用。
+     */
+    private JavbusApiStar fillStarFromRemote(String starId, String type) {
+        try {
+            com.alibaba.fastjson.JSONObject remote = apiClient.getStar(starId, type);
+            if (remote == null) {
+                return null;
+            }
+            JavbusApiStar star = new JavbusApiStar();
+            star.setId(remote.getString("id"));
+            star.setName(remote.getString("name"));
+            star.setAvatar(remote.getString("avatar"));
+            star.setBirthday(remote.getString("birthday"));
+            star.setAge(remote.getString("age"));
+            star.setHeight(remote.getString("height"));
+            star.setBust(remote.getString("bust"));
+            star.setWaistline(remote.getString("waistline"));
+            star.setHipline(remote.getString("hipline"));
+            star.setBirthplace(remote.getString("birthplace"));
+            star.setHobby(remote.getString("hobby"));
+            if (StringUtils.isBlank(star.getId())) {
+                star.setId(starId);
+            }
+            if (StringUtils.isNotBlank(star.getId()) && StringUtils.isNotBlank(star.getName())) {
+                // 头像转本地：已存在本地文件则复用，否则下载（与影片封面处理一致）
+                star.setAvatarLocal(localizeAvatar(star.getId(), star.getAvatar()));
+                starMapper.upsert(star);
+                return starMapper.findById(star.getId());
+            }
+        } catch (Exception e) {
+            log.warn("javbus-api 演员详情拉取失败, starId={}", starId, e);
+        }
+        return null;
+    }
+
+    /**
+     * 启动后台批量同步演员详情：遍历 javbus_star 全部演员 ID，
+     * 逐个调 javbus-api /api/stars/{id} 拉取详情并 upsert 入库。
+     */
+    public boolean startStarSync() {
+        synchronized (this) {
+            if (starSyncing) {
+                return false;
+            }
+            List<String> ids = starMapper.selectAllIds();
+            if (ids == null || ids.isEmpty()) {
+                starSyncMessage = "暂无演员需要同步";
+                return false;
+            }
+            starSyncing = true;
+            starSyncTotal = ids.size();
+            starSyncDone = 0;
+            starSyncSuccess = 0;
+            starSyncFail = 0;
+            starSyncMessage = "正在启动...";
+            starSyncCurrentId = null;
+            starSyncLastRunAt = System.currentTimeMillis();
+            final List<String> taskIds = new ArrayList<>(ids);
+            starSyncExecutor.submit(() -> starSyncLoop(taskIds));
+            return true;
+        }
+    }
+
+    /** 演员批量同步状态。 */
+    public Map<String, Object> starSyncStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("running", starSyncing);
+        status.put("total", starSyncTotal);
+        status.put("done", starSyncDone);
+        status.put("success", starSyncSuccess);
+        status.put("fail", starSyncFail);
+        status.put("message", starSyncMessage);
+        status.put("currentId", starSyncCurrentId);
+        status.put("lastRunAt", starSyncLastRunAt == 0L ? null : new Date(starSyncLastRunAt));
+        return status;
+    }
+
+    /** 后台同步循环。 */
+    private void starSyncLoop(List<String> ids) {
+        try {
+            for (String id : ids) {
+                if (StringUtils.isBlank(id)) {
+                    starSyncDone++;
+                    continue;
+                }
+                starSyncCurrentId = id;
+                starSyncMessage = "正在同步 " + id + " (" + (starSyncDone + 1) + "/" + ids.size() + ")";
+                try {
+                    JavbusApiStar star = fillStarFromRemote(id.trim(), null);
+                    if (star != null) {
+                        starSyncSuccess++;
+                    } else {
+                        starSyncFail++;
+                    }
+                } catch (Exception e) {
+                    starSyncFail++;
+                    log.warn("演员同步失败, id={}", id, e);
+                }
+                starSyncDone++;
+            }
+            starSyncMessage = "同步完成：成功 " + starSyncSuccess + "，失败 " + starSyncFail + "，共 " + ids.size() + " 位";
+        } catch (Exception e) {
+            log.error("演员批量同步任务异常", e);
+            starSyncMessage = "任务异常：" + e.getMessage();
+        } finally {
+            starSyncing = false;
+            starSyncCurrentId = null;
+        }
     }
 
     /**

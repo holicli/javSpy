@@ -33,6 +33,13 @@ public interface JavbusApiStarMapper extends BaseMapper<JavbusApiStar> {
     List<JavbusApiStar> searchByName(@Param("name") String name,
                                      @Param("limit") int limit);
 
+    /** 查询全部演员 ID（用于批量同步详情）。 */
+    List<String> selectAllIds();
+
+    /** 回写本地头像地址。 */
+    int updateAvatarLocal(@Param("id") String id,
+                          @Param("avatarLocal") String avatarLocal);
+
     /** 插入影片-演员关联。 */
     int insertMovieStars(@Param("movieId") Long movieId,
                          @Param("list") List<JavbusApiStar> stars);

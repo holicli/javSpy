@@ -11,7 +11,7 @@
         </div>
 
         <div v-else class="star-card">
-            <el-image :src="star.avatar" fit="cover" class="star-avatar" lazy>
+            <el-image :src="star.avatarLocal || star.avatar" fit="cover" class="star-avatar" lazy>
                 <template #error>
                     <div class="avatar-fallback">无头像</div>
                 </template>

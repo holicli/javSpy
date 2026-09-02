@@ -3,37 +3,40 @@
 <mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiStarMapper">
 
     <insert id="upsert">
-        INSERT INTO javbus_star (id, name, avatar, birthday, age, height, bust,
+        INSERT INTO javbus_star (id, name, avatar, avatar_local, birthday, age, height, bust,
                                  waistline, hipline, birthplace, hobby, created_at, updated_at)
-        VALUES (#{id}, #{name}, #{avatar}, #{birthday}, #{age}, #{height}, #{bust},
+        VALUES (#{id}, #{name}, #{avatar}, #{avatarLocal}, #{birthday}, #{age}, #{height}, #{bust},
                 #{waistline}, #{hipline}, #{birthplace}, #{hobby}, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
-            name       = VALUES(name),
-            avatar     = VALUES(avatar),
-            birthday   = VALUES(birthday),
-            age        = VALUES(age),
-            height     = VALUES(height),
-            bust       = VALUES(bust),
-            waistline  = VALUES(waistline),
-            hipline    = VALUES(hipline),
-            birthplace = VALUES(birthplace),
-            hobby      = VALUES(hobby),
-            updated_at = NOW()
+            name        = VALUES(name),
+            avatar      = VALUES(avatar),
+            avatar_local = VALUES(avatar_local),
+            birthday    = VALUES(birthday),
+            age         = VALUES(age),
+            height      = VALUES(height),
+            bust        = VALUES(bust),
+            waistline   = VALUES(waistline),
+            hipline     = VALUES(hipline),
+            birthplace  = VALUES(birthplace),
+            hobby       = VALUES(hobby),
+            updated_at  = NOW()
     </insert>
 
     <insert id="upsertBatch">
-        INSERT INTO javbus_star (id, name, created_at, updated_at)
+        INSERT INTO javbus_star (id, name, avatar, avatar_local, created_at, updated_at)
         VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.id}, #{item.name}, NOW(), NOW())
+            (#{item.id}, #{item.name}, #{item.avatar}, #{item.avatarLocal}, NOW(), NOW())
         </foreach>
         ON DUPLICATE KEY UPDATE
-            name       = VALUES(name),
-            updated_at = NOW()
+            name         = VALUES(name),
+            avatar       = VALUES(avatar),
+            avatar_local = VALUES(avatar_local),
+            updated_at   = NOW()
     </insert>
 
     <select id="findStarsByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
-        SELECT st.id, st.name, st.avatar, st.birthday, st.age, st.height,
+        SELECT st.id, st.name, st.avatar, st.avatar_local AS avatarLocal, st.birthday, st.age, st.height,
                st.bust, st.waistline, st.hipline, st.birthplace, st.hobby
         FROM javbus_movie_star ms
         JOIN javbus_star st ON st.id = ms.star_id
@@ -55,7 +58,7 @@
     </select>
 
     <select id="findById" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
-        SELECT id, name, avatar, birthday, age, height, bust, waistline,
+        SELECT id, name, avatar, avatar_local AS avatarLocal, birthday, age, height, bust, waistline,
                hipline, birthplace, hobby, created_at AS createdAt, updated_at AS updatedAt
         FROM javbus_star
         WHERE id = #{id}
@@ -63,13 +66,25 @@
     </select>
 
     <select id="searchByName" resultType="org.holic.javspy.javbusapi.model.JavbusApiStar">
-        SELECT id, name, avatar, birthday, age, height, bust, waistline,
+        SELECT id, name, avatar, avatar_local AS avatarLocal, birthday, age, height, bust, waistline,
                hipline, birthplace, hobby
         FROM javbus_star
         WHERE name LIKE CONCAT('%', #{name}, '%')
         ORDER BY name ASC
         LIMIT #{limit}
     </select>
+
+    <select id="selectAllIds" resultType="java.lang.String">
+        SELECT id
+        FROM javbus_star
+    </select>
+
+    <update id="updateAvatarLocal">
+        UPDATE javbus_star
+        SET avatar_local = #{avatarLocal},
+            updated_at   = NOW()
+        WHERE id = #{id}
+    </update>
 
     <insert id="insertMovieStars">
         INSERT IGNORE INTO javbus_movie_star (movie_id, star_id)

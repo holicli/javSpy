@@ -58,6 +58,23 @@ public class JavbusApiController {
                 .message("查询成功").build();
     }
 
+    /** 后台批量同步演员详情（遍历 javbus_star 全表调 /api/stars/{id} 更新）：POST /javbus-api/stars/sync */
+    @org.springframework.web.bind.annotation.PostMapping("/stars/sync")
+    public WebResult<Boolean> starSync() {
+        boolean started = service.startStarSync();
+        return WebResult.<Boolean>builder()
+                .success(started).data(started)
+                .message(started ? "已开始批量同步演员信息" : "演员同步任务已在运行或无演员可同步").build();
+    }
+
+    /** 演员批量同步状态：GET /javbus-api/stars/sync/status */
+    @GetMapping("/stars/sync/status")
+    public WebResult<Map<String, Object>> starSyncStatus() {
+        return WebResult.<Map<String, Object>>builder()
+                .success(true).data(service.starSyncStatus())
+                .message("查询成功").build();
+    }
+
     /** 连通性自检：GET /javbus-api/ping */
     @GetMapping("/ping")
     public WebResult<String> ping() {

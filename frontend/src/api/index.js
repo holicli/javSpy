@@ -89,7 +89,11 @@ export const javbusApi = {
 
     // Emby 影片清单缓存（数据库）
     embySync: () => http.post('/javbus-api/emby/sync'),
-    embyStatus: () => http.get('/javbus-api/emby/status')
+    embyStatus: () => http.get('/javbus-api/emby/status'),
+
+    // 演员信息批量同步（后台）
+    starSync: () => http.post('/javbus-api/stars/sync'),
+    starSyncStatus: () => http.get('/javbus-api/stars/sync/status')
 }
 
 /** 复制文本到剪贴板（带降级方案）。 */

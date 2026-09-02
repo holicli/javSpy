@@ -27,6 +27,9 @@ public class JavbusApiStar implements Serializable {
     /** 头像地址 */
     private String avatar;
 
+    /** 本地头像地址 */
+    private String avatarLocal;
+
     /** 生日 yyyy-MM-dd */
     private String birthday;
 
