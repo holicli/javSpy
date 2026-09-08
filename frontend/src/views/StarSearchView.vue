@@ -126,10 +126,19 @@
                         <span v-else class="text-muted">—</span>
                     </template>
                 </el-table-column>
-                <el-table-column label="操作" width="130" align="center" fixed="right">
+                <el-table-column label="操作" width="215" align="center" fixed="right">
                     <template #default="{ row }">
                         <el-button size="small" type="primary" plain @click="openDetail(row.code)">详情</el-button>
                         <el-button size="small" type="success" plain @click="openMagnets(row.code)">磁力</el-button>
+                        <el-button
+                            size="small"
+                            type="warning"
+                            plain
+                            :loading="refreshingCode === row.code"
+                            @click="refreshMagnetsOf(row.code)"
+                        >
+                            更新磁力
+                        </el-button>
                     </template>
                 </el-table-column>
             </el-table>
@@ -168,7 +177,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { javbusApi } from '@/api'
 import MovieDetailDialog from '@/components/MovieDetailDialog.vue'
@@ -183,12 +192,15 @@ const keyword = ref('')
 const stars = ref([])
 const starLoading = ref(false)
 const searched = ref(false)
+const followedLoaded = ref(false)
 
 const selectedStar = ref(null)
 const movies = ref([])
 const movieLoading = ref(false)
 const pageNum = ref(1)
 const hasMore = ref(false)
+/** 正在刷新磁力的番号（行内按钮 loading） */
+const refreshingCode = ref('')
 
 const detailVisible = ref(false)
 const detailCode = ref('')
@@ -277,6 +289,27 @@ function openDetail(code) {
 function openMagnets(code) {
     magnetCode.value = code
     magnetVisible.value = true
+}
+
+/** 行内更新磁力：重拉 javbus 增量入库，成功后刷新该行磁力数量。 */
+async function refreshMagnetsOf(code) {
+    if (refreshingCode.value) return
+    refreshingCode.value = code
+    try {
+        const res = await javbusApi.refreshMagnets(code)
+        if (res.success) {
+            const after = Number(res.data?.after ?? 0)
+            const row = movies.value.find((r) => r.code === code)
+            if (row && !Number.isNaN(after)) row.magnetCount = after
+            ElMessage.success(res.message || '更新磁力完成')
+        } else {
+            ElMessage.error(res.message || '更新磁力失败')
+        }
+    } catch (e) {
+        ElMessage.error('更新磁力失败：' + e.message)
+    } finally {
+        refreshingCode.value = ''
+    }
 }
 </script>
 

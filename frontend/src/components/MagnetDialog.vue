@@ -8,12 +8,18 @@
 
         <div v-else-if="magnets.length === 0" class="body empty">
             <el-empty description="该影片暂无磁力链接" :image-size="90" />
+            <el-button type="danger" plain :loading="refreshing" @click="refresh" style="margin-top: 12px">
+                刷新磁力（重新从 javbus 获取）
+            </el-button>
         </div>
 
         <template v-else>
             <div class="toolbar-line">
                 <span class="text-muted">共 {{ magnets.length }} 条磁力</span>
                 <div>
+                    <el-button size="small" type="danger" plain :loading="refreshing" @click="refresh">
+                        刷新磁力
+                    </el-button>
                     <el-button size="small" type="warning" plain :disabled="magnets.length === 0" @click="stageAll">
                         暂存全部
                     </el-button>
@@ -79,6 +85,7 @@ const visible = computed({
 })
 
 const loading = ref(false)
+const refreshing = ref(false)
 const error = ref('')
 const magnets = ref([])
 
@@ -97,6 +104,24 @@ async function load() {
         error.value = e.message
     } finally {
         loading.value = false
+    }
+}
+
+/** 重新拉取 javbus 最新磁力并增量入库，然后刷新列表。 */
+async function refresh() {
+    refreshing.value = true
+    try {
+        const res = await javbusApi.refreshMagnets(props.code)
+        if (res.success) {
+            ElMessage.success(res.message || '刷新完成')
+        } else {
+            ElMessage.error(res.message || '刷新失败')
+        }
+        await load()
+    } catch (e) {
+        ElMessage.error('刷新磁力失败：' + e.message)
+    } finally {
+        refreshing.value = false
     }
 }
 

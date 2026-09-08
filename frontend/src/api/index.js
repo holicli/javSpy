@@ -76,6 +76,10 @@ export const javbusApi = {
     saveMagnet: (code, magnet) =>
         http.post('/javbus-api/magnets/save', null, { params: { code, magnet } }),
 
+    // 刷新单部影片磁力（重拉 javbus-api 增量入库）
+    refreshMagnets: (code) =>
+        http.post('/javbus-api/magnets/refresh', null, { params: { code } }),
+
     // 关注演员
     followActors: () => http.get('/javbus-api/follow/actors'),
     addFollowActor: (name, remark) =>

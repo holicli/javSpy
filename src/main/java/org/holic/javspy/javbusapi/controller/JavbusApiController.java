@@ -337,4 +337,22 @@ public class JavbusApiController {
                     .success(false).message(e.getMessage()).build();
         }
     }
+
+    /** 刷新单部影片磁力（重拉 javbus-api 增量入库）：
+     * POST /javbus-api/magnets/refresh?code=SSIS-406
+     * 返回 {code, before, after, added} */
+    @org.springframework.web.bind.annotation.PostMapping("/magnets/refresh")
+    public WebResult<Map<String, Object>> refreshMagnets(
+            @org.springframework.web.bind.annotation.RequestParam("code") String code) {
+        try {
+            Map<String, Object> data = service.refreshMagnets(code);
+            int added = ((Number) data.getOrDefault("added", 0)).intValue();
+            return WebResult.<Map<String, Object>>builder()
+                    .success(true).data(data)
+                    .message(added > 0 ? "更新磁力完成，新增 " + added + " 条" : "已是最新，无新增磁力").build();
+        } catch (Exception e) {
+            return WebResult.<Map<String, Object>>builder()
+                    .success(false).message(e.getMessage()).build();
+        }
+    }
 }

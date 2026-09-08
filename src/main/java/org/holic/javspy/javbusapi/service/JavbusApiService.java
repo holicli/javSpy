@@ -175,8 +175,8 @@ public class JavbusApiService {
     }
 
     /**
-     * javbus API 关键字搜索并逐部完整入库（详情 + 磁力 + 封面下载），
-     * 返回每部的入库结果行。
+     * javbus API 关键字搜索：逐部判断——已入库的直接读库展示（不重复抓详情/入库），
+     * 只有未入库的才抓详情 + 入库，减少重复搜索时的 API 调用与 SQL 量。
      */
     public List<JavbusApiScrapeItem> searchFromApi(String keyword, int page, String magnet) {
         if (StringUtils.isBlank(keyword)) {
@@ -186,10 +186,46 @@ public class JavbusApiService {
         try {
             Set<String> embyCodes = embyMovieService.getCodes();
             List<JavbusApiVideoItem> items = apiClient.searchMovies(keyword.trim(), Math.max(1, page), magnet, null);
-            for (JavbusApiVideoItem item : items) {
-                summary.add(scrapeOne(item, embyCodes));
+            if (items.isEmpty()) {
+                return summary;
             }
-            log.info("javbus-api 搜索并入库完成, keyword={}, page={}, total={}", keyword, page, summary.size());
+            // 批量查库：已入库影片直接读库展示，避免重复抓详情 + 重复入库 SQL
+            List<String> codes = new ArrayList<>();
+            for (JavbusApiVideoItem item : items) {
+                if (item != null && StringUtils.isNotBlank(item.getCode())) {
+                    codes.add(item.getCode());
+                }
+            }
+            Map<String, JavbusApiMovie> byCode = new java.util.HashMap<>();
+            if (!codes.isEmpty()) {
+                for (JavbusApiMovie movie : movieMapper.findByCodes(codes)) {
+                    if (movie != null && StringUtils.isNotBlank(movie.getCode())) {
+                        byCode.put(movie.getCode(), movie);
+                    }
+                }
+            }
+            Map<String, MovieDisplayData> displayByCode = loadDisplayData(codes);
+            for (JavbusApiVideoItem item : items) {
+                if (item == null || StringUtils.isBlank(item.getCode())) {
+                    continue;
+                }
+                JavbusApiMovie movie = byCode.get(item.getCode());
+                if (movie != null) {
+                    // 已入库 -> 读库展示（封面本地缺失时补下载）
+                    ensureCoverLocal(movie);
+                    JavbusApiScrapeItem row = JavbusApiScrapeItem.fromDisplay(
+                            toDisplayRow(movie, embyCodes, displayByCode));
+                    row.setStatus("DB");
+                    summary.add(row);
+                } else {
+                    // 未入库 -> 抓详情 + 磁力 + 封面并入库
+                    summary.add(scrapeOne(item, embyCodes));
+                }
+            }
+            log.info("javbus-api 搜索完成, keyword={}, page={}, total={}, db={}, inserted={}",
+                    keyword, page, summary.size(),
+                    summary.stream().filter(r -> "DB".equals(r.getStatus())).count(),
+                    summary.stream().filter(r -> "INSERTED".equals(r.getStatus())).count());
         } catch (Exception e) {
             log.error("javbus-api 搜索失败, keyword={}", keyword, e);
             throw new RuntimeException("javbus-api 搜索失败: " + e.getMessage(), e);
@@ -875,6 +911,59 @@ public class JavbusApiService {
             throw new IllegalArgumentException("番号不能为空");
         }
         return magnetMapper.findByCode(code.trim().toUpperCase());
+    }
+
+    /**
+     * 刷新单部影片的磁力链接：重新调 javbus-api /api/magnets/{code} 拉取最新磁力，
+     * 按链接去重增量入库（INSERT IGNORE，保留旧磁力、只补新增）。
+     *
+     * @return {code, before, after, added}
+     */
+    public Map<String, Object> refreshMagnets(String code) {
+        if (StringUtils.isBlank(code)) {
+            throw new IllegalArgumentException("番号不能为空");
+        }
+        String c = code.trim().toUpperCase();
+        JavbusApiMovie movie = movieMapper.findByCode(c);
+        if (movie == null) {
+            throw new IllegalArgumentException("影片尚未入库，无法刷新磁力：" + c);
+        }
+        int before = magnetMapper.countByCode(c);
+        try {
+            // 详情里带 gid/uc，磁力接口需要它们；DB 里可能存过，优先用，缺失则重新抓详情
+            String gid = movie.getGid();
+            String uc = movie.getUc();
+            List<JavbusApiMagnet> fresh = new ArrayList<>();
+            if (StringUtils.isNotBlank(gid)) {
+                fresh = apiClient.getMagnets(c, gid, uc);
+            } else {
+                JavbusApiScrapeResult detail = apiClient.scrapeMovie(c);
+                if (detail != null && detail.getMovie() != null
+                        && StringUtils.isNotBlank(detail.getMovie().getGid())) {
+                    fresh = apiClient.getMagnets(c, detail.getMovie().getGid(),
+                            detail.getMovie().getUc());
+                }
+            }
+            if (fresh != null && !fresh.isEmpty()) {
+                for (JavbusApiMagnet magnet : fresh) {
+                    if (magnet != null) {
+                        magnet.setCode(c);
+                        magnet.setMovieId(movie.getId());
+                    }
+                }
+                magnetMapper.insertBatch(fresh); // 按 link 唯一键 IGNORE，只补新增
+            }
+        } catch (Exception e) {
+            log.warn("javbus-api 刷新磁力失败, code={}", c, e);
+            throw new RuntimeException("刷新磁力失败: " + e.getMessage(), e);
+        }
+        int after = magnetMapper.countByCode(c);
+        Map<String, Object> result = new HashMap<>();
+        result.put("code", c);
+        result.put("before", before);
+        result.put("after", after);
+        result.put("added", after - before);
+        return result;
     }
 
     /**
