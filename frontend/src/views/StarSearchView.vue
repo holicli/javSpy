@@ -2,7 +2,18 @@
     <div class="page-container">
         <!-- 搜索栏 -->
         <div class="page-header">
-            <h2 class="page-title">{{ selectedStar ? selectedStar.name + ' 的影片' : '演员搜索' }}</h2>
+            <h2 class="page-title">
+                {{ selectedStar ? selectedStar.name + ' 的影片' : '演员搜索' }}
+                <el-tag
+                    v-if="selectedStar && isFollowed(selectedStar.name)"
+                    size="small"
+                    type="success"
+                    effect="plain"
+                    class="followed-tag"
+                >
+                    已关注
+                </el-tag>
+            </h2>
             <div class="toolbar">
                 <el-input
                     v-model="keyword"
@@ -10,7 +21,7 @@
                     clearable
                     style="width: 260px"
                     @keyup.enter="onSearch"
-                    @clear="onSearch"
+                    @clear="resetSearch"
                 >
                     <template #prefix><el-icon><Search /></el-icon></template>
                 </el-input>
@@ -21,7 +32,48 @@
 
         <!-- 演员结果 -->
         <div v-if="!selectedStar">
-            <div v-loading="starLoading" class="star-grid-wrap">
+            <!-- 我关注的演员：未输入关键字时展示（数据来自 javbus_follow_actor） -->
+            <div v-if="showFollows" class="follow-block">
+                <div class="follow-header">
+                    <span>我关注的演员</span>
+                    <span class="text-muted follow-count">{{ follows.length }} 位</span>
+                    <el-button link type="primary" size="small" :loading="followLoading" @click="loadFollows">
+                        刷新
+                    </el-button>
+                </div>
+                <div v-loading="followLoading" class="star-grid-wrap">
+                    <div v-if="follows.length" class="star-grid">
+                        <div
+                            v-for="item in follows"
+                            :key="item.id"
+                            class="star-card"
+                            :title="item.remark ? item.name + '（' + item.remark + '）' : item.name"
+                            @click="openFollowed(item)"
+                        >
+                            <el-image
+                                v-if="followAvatar(item)"
+                                :src="followAvatar(item)"
+                                fit="cover"
+                                class="star-avatar"
+                                lazy
+                            >
+                                <template #error>
+                                    <div class="star-avatar-fallback">{{ (item.name || '?').charAt(0) }}</div>
+                                </template>
+                            </el-image>
+                            <div v-else class="star-avatar-fallback star-avatar">
+                                {{ (item.name || '?').charAt(0) }}
+                            </div>
+                            <div class="star-name" :title="item.name">{{ item.name }}</div>
+                        </div>
+                    </div>
+                    <div v-else-if="!followLoading" class="star-empty-hint">
+                        暂无关注的演员，可在影片详情的演员弹窗或「刮削中心」里添加
+                    </div>
+                </div>
+            </div>
+
+            <div v-show="!showFollows" v-loading="starLoading" class="star-grid-wrap">
                 <div v-if="stars.length" class="star-grid">
                     <div
                         v-for="star in stars"
@@ -29,6 +81,7 @@
                         class="star-card"
                         @click="selectStar(star)"
                     >
+                        <span v-if="isFollowed(star.name)" class="star-follow-badge">已关注</span>
                         <el-image
                             :src="star.avatarLocal || star.avatar"
                             fit="cover"
@@ -192,7 +245,14 @@ const keyword = ref('')
 const stars = ref([])
 const starLoading = ref(false)
 const searched = ref(false)
-const followedLoaded = ref(false)
+
+/** 我关注的演员（javbus_follow_actor 只存名字，star 由名字匹配后补齐） */
+const follows = ref([])
+const followLoading = ref(false)
+const followNames = ref(new Set())
+/** 未输入关键字时展示关注区，输入关键字后让位给搜索结果 */
+const showFollows = computed(() => !keyword.value.trim())
+const isFollowed = (name) => !!name && followNames.value.has(name)
 
 const selectedStar = ref(null)
 const movies = ref([])
@@ -234,10 +294,86 @@ function selectStar(star) {
     loadMovies(1)
 }
 
+/** 清空关键字：回到「我关注的演员」视图，不弹提示。 */
+function resetSearch() {
+    stars.value = []
+    searched.value = false
+    selectedStar.value = null
+    movies.value = []
+}
+
 function backToSearch() {
     selectedStar.value = null
     movies.value = []
 }
+
+/** 关注演员的头像：匹配到 star 记录时用它的图，否则首字母占位。 */
+function followAvatar(item) {
+    const star = item.star
+    return (star && (star.avatarLocal || star.avatar)) || ''
+}
+
+/**
+ * 加载关注的演员。
+ * 关注表只有演员名、没有 starId，所以入库后按名字去 javbus_star 匹配一次；
+ * 匹配到的 starId 让点击卡片能直接列影片，不用再查一次。
+ */
+async function loadFollows() {
+    followLoading.value = true
+    try {
+        const res = await javbusApi.followActors()
+        const rows = Array.isArray(res.data) ? res.data : []
+        follows.value = rows.map((row) => ({
+            id: row.id,
+            name: row.actorName,
+            remark: row.remark,
+            star: null
+        }))
+        followNames.value = new Set(follows.value.map((item) => item.name))
+        enrichFollows()
+    } catch (e) {
+        ElMessage.error('加载关注演员失败：' + e.message)
+    } finally {
+        followLoading.value = false
+    }
+}
+
+/** 并发补齐关注演员对应的 star 记录（限并发，失败的保留首字母占位）。 */
+async function enrichFollows() {
+    const queue = follows.value.filter((item) => !item.star)
+    const worker = async () => {
+        while (queue.length) {
+            const item = queue.shift()
+            try {
+                const res = await javbusApi.searchStars(item.name, 5)
+                const list = Array.isArray(res.data) ? res.data : []
+                item.star = list.find((star) => star.name === item.name) || list[0] || null
+            } catch {
+                /* 忽略：保持首字母占位 */
+            }
+        }
+    }
+    await Promise.all([worker(), worker(), worker()])
+    follows.value = [...follows.value]
+}
+
+/** 点击关注的演员：已匹配到 star 直接列影片，否则按名字搜一次再选。 */
+async function openFollowed(item) {
+    if (item.star) {
+        selectStar(item.star)
+        return
+    }
+    keyword.value = item.name
+    await onSearch()
+    const exact = stars.value.find((star) => star.name === item.name) || stars.value[0]
+    if (exact) {
+        selectStar(exact)
+    } else {
+        ElMessage.warning('未找到该演员：' + item.name)
+    }
+}
+
+onMounted(loadFollows)
 
 function normalize(row) {
     return {
@@ -318,6 +454,30 @@ async function refreshMagnetsOf(code) {
     width: 260px;
 }
 
+.followed-tag {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.follow-block {
+    margin-bottom: 18px;
+}
+
+.follow-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #334155;
+}
+
+.follow-count {
+    font-weight: 400;
+    font-size: 12.5px;
+}
+
 .star-grid-wrap {
     min-height: 120px;
 }
@@ -329,6 +489,7 @@ async function refreshMagnetsOf(code) {
 }
 
 .star-card {
+    position: relative;
     background: #fff;
     border-radius: 10px;
     overflow: hidden;
@@ -337,6 +498,21 @@ async function refreshMagnetsOf(code) {
     transition: transform 0.15s, box-shadow 0.15s;
     text-align: center;
     padding-bottom: 6px;
+}
+
+.star-follow-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 2;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(16, 185, 129, 0.92);
+    color: #fff;
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
 .star-card:hover {
