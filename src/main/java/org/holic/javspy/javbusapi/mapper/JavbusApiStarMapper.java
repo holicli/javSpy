@@ -3,7 +3,6 @@ package org.holic.javspy.javbusapi.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Param;
 import org.holic.javspy.javbusapi.model.JavbusApiStar;
-import org.holic.javspy.javbusapi.model.JavbusApiStarName;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -22,9 +21,6 @@ public interface JavbusApiStarMapper extends BaseMapper<JavbusApiStar> {
 
     /** 按影片 code 查询演员列表（关联 javbus_movie_star / javbus_star）。 */
     List<JavbusApiStar> findStarsByCode(@Param("code") String code);
-
-    /** 按多个影片 code 批量查询演员名称。 */
-    List<JavbusApiStarName> findStarsByCodes(@Param("codes") List<String> codes);
 
     /** 按演员 ID 查询演员详情。 */
     JavbusApiStar findById(@Param("id") String id);

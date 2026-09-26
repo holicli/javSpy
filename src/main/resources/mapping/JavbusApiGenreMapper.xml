@@ -2,9 +2,12 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusApiGenreMapper">
 
-    <insert id="upsert">
+    <insert id="upsertBatch">
         INSERT INTO javbus_genre (id, name, created_at)
-        VALUES (#{id}, #{name}, NOW())
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.id}, #{item.name}, NOW())
+        </foreach>
         ON DUPLICATE KEY UPDATE name = VALUES(name)
     </insert>
 
@@ -15,24 +18,4 @@
             (#{movieId}, #{item.id})
         </foreach>
     </insert>
-
-    <select id="findByMovieCode" resultType="java.lang.String">
-        SELECT jg.name
-        FROM javbus_movie jm
-        LEFT JOIN javbus_movie_genre jmg ON jm.id = jmg.movie_id
-        LEFT JOIN javbus_genre jg ON jmg.genre_id = jg.id
-        WHERE jm.code = #{code}
-    </select>
-
-    <select id="findByCodes" resultType="org.holic.javspy.javbusapi.model.JavbusApiGenreName">
-        SELECT jm.code AS code, jg.name AS name
-        FROM javbus_movie jm
-        LEFT JOIN javbus_movie_genre jmg ON jm.id = jmg.movie_id
-        LEFT JOIN javbus_genre jg ON jmg.genre_id = jg.id
-        WHERE jm.code IN
-        <foreach collection="codes" item="item" open="(" separator="," close=")">
-            #{item}
-        </foreach>
-        ORDER BY jm.code ASC
-    </select>
 </mapper>

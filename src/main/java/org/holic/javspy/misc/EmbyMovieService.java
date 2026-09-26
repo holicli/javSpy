@@ -57,32 +57,56 @@ public class EmbyMovieService {
         return getCodes().contains(code.trim().toUpperCase());
     }
 
+    /** 进程内缓存的番号集合（当日有效），避免每次请求都查库 + 重建大集合。 */
+    private volatile Set<String> cachedCodes = null;
+    /** 进程内缓存生成日期（本地时区）。 */
+    private volatile LocalDate cachedAt = null;
+
     /**
-     * 获取 Emby 中全部影片番号集合（数据库缓存）。
-     * 缓存非当日时自动触发全量覆盖更新；Emby 拉取失败则使用数据库旧数据。
+     * 获取 Emby 中全部影片番号集合（数据库缓存 + 进程内当日缓存）。
+     * 数据库缓存非当日时自动触发一次全量覆盖更新；Emby 拉取失败则使用数据库旧数据。
      */
     public Set<String> getCodes() {
         if (!enabled) {
             return Collections.emptySet();
         }
-        synchronized (this) {
-            Date lastSyncAt = embyMovieMapper.selectLastSyncAt();
-            if (!isToday(lastSyncAt)) {
-                try {
-                    syncFromEmby();
-                } catch (Exception e) {
-                    log.warn("Emby 清单自动同步失败，使用数据库旧数据: {}", e.getMessage());
-                }
-            }
-            List<String> codes = embyMovieMapper.selectAllCodes();
-            Set<String> set = new HashSet<>(Math.max(16, codes.size() * 2));
-            for (String c : codes) {
-                if (StringUtils.isNotBlank(c)) {
-                    set.add(c.trim().toUpperCase());
-                }
-            }
-            return set;
+        LocalDate today = LocalDate.now();
+        Set<String> cached = cachedCodes;
+        if (cached != null && today.equals(cachedAt)) {
+            return cached;
         }
+        synchronized (this) {
+            if (cachedCodes != null && today.equals(cachedAt)) {
+                return cachedCodes;
+            }
+            try {
+                Date lastSyncAt = embyMovieMapper.selectLastSyncAt();
+                if (!isToday(lastSyncAt)) {
+                    try {
+                        syncFromEmby();
+                    } catch (Exception e) {
+                        log.warn("Emby 清单自动同步失败，使用数据库旧数据: {}", e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Emby 缓存刷新失败，使用数据库旧数据: {}", e.getMessage());
+            }
+            reloadCodes();
+            return cachedCodes;
+        }
+    }
+
+    /** 从数据库重新加载番号集合并更新进程内缓存。 */
+    private void reloadCodes() {
+        List<String> codes = embyMovieMapper.selectAllCodes();
+        Set<String> set = new HashSet<>(Math.max(16, codes.size() * 2));
+        for (String c : codes) {
+            if (StringUtils.isNotBlank(c)) {
+                set.add(c.trim().toUpperCase());
+            }
+        }
+        cachedCodes = Collections.unmodifiableSet(set);
+        cachedAt = LocalDate.now();
     }
 
     /** 手动全量同步 Emby 影片清单到数据库（覆盖更新）。 */
@@ -93,6 +117,7 @@ public class EmbyMovieService {
         synchronized (this) {
             try {
                 int count = syncFromEmby();
+                reloadCodes();
                 Date lastSyncAt = embyMovieMapper.selectLastSyncAt();
                 return SyncResult.ok(count, lastSyncAt);
             } catch (Exception e) {

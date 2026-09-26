@@ -3,6 +3,7 @@ package org.holic.javspy.javbusapi.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Param;
 import org.holic.javspy.javbusapi.model.JavbusApiMovie;
+import org.holic.javspy.javbusapi.model.JavbusApiMovieDisplay;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -27,8 +28,22 @@ public interface JavbusApiMovieMapper extends BaseMapper<JavbusApiMovie> {
                                       @Param("keyword") String keyword,
                                       @Param("releaseDate") String releaseDate);
 
-    /** 按入库时间倒序查询影片列表。 */
+    /** 查询影片列表（SQL 按 release_date DESC, code 排序，用于 /newest）。 */
     List<JavbusApiMovie> searchNewest();
+
+    /** 按条件统计影片数量（与 searchMovies 条件一致）。 */
+    long countMovies(@Param("code") String code,
+                     @Param("keyword") String keyword,
+                     @Param("releaseDate") String releaseDate);
+
+    /** 统计已入库影片总数。 */
+    long countNewest();
+
+    /**
+     * 批量查询展示补充信息（演员 / 类型 / 磁力数），
+     * 一条 SQL 内用相关子查询聚合，替代原来的 3 条逐表查询。
+     */
+    List<JavbusApiMovieDisplay> findDisplayExtras(@Param("codes") List<String> codes);
 
     /** 回写本地封面地址。 */
     int updateCoverLocal(@Param("code") String code, @Param("coverLocal") String coverLocal);

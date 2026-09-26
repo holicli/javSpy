@@ -83,4 +83,45 @@
             updated_at  = NOW()
         WHERE code = #{code}
     </update>
+
+    <select id="countMovies" resultType="long">
+        SELECT COUNT(*)
+        FROM javbus_movie
+        <where>
+            <if test="code != null and code != ''">
+                AND code = #{code}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND title LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test="releaseDate != null and releaseDate != ''">
+                AND release_date = #{releaseDate}
+            </if>
+        </where>
+    </select>
+
+    <select id="countNewest" resultType="long">
+        SELECT COUNT(*)
+        FROM javbus_movie
+    </select>
+
+    <!-- 批量展示补充信息：一条 SQL 内聚合演员/类型/磁力数（相关子查询走主键/索引） -->
+    <select id="findDisplayExtras" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovieDisplay">
+        SELECT
+            m.code AS code,
+            (SELECT GROUP_CONCAT(s.name SEPARATOR ',')
+             FROM javbus_movie_star ms
+             JOIN javbus_star s ON s.id = ms.star_id
+             WHERE ms.movie_id = m.id) AS actors,
+            (SELECT GROUP_CONCAT(g.name SEPARATOR ',')
+             FROM javbus_movie_genre mg
+             JOIN javbus_genre g ON g.id = mg.genre_id
+             WHERE mg.movie_id = m.id) AS genres,
+            (SELECT COUNT(*) FROM javbus_magnet mag WHERE mag.code = m.code) AS magnet_count
+        FROM javbus_movie m
+        WHERE m.code IN
+        <foreach collection="codes" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
 </mapper>
