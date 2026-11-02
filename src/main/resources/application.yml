@@ -26,7 +26,7 @@ server:
     port: 8084
 
 mybatis-plus:
-    mapper-locations: classpath*:**/mapping/*.xml
+    mapper-locations: classpath*:/mapping/*.xml
     configuration:
         # 查询结果按列名映射到驼峰属性（cover_url -> coverUrl）
         map-underscore-to-camel-case: true

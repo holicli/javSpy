@@ -99,6 +99,12 @@ public class EmbyMovieService {
     /** 从数据库重新加载番号集合并更新进程内缓存。 */
     private void reloadCodes() {
         List<String> codes = embyMovieMapper.selectAllCodes();
+        if (codes == null) {
+            // mapper 实现异常时返回 null，按"没有缓存"处理，避免 NPE 打到 exists() 调用方
+            cachedCodes = Collections.emptySet();
+            cachedAt = LocalDate.now();
+            return;
+        }
         Set<String> set = new HashSet<>(Math.max(16, codes.size() * 2));
         for (String c : codes) {
             if (StringUtils.isNotBlank(c)) {

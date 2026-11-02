@@ -804,10 +804,54 @@ public class JavbusApiService {
     }
 
     /**
-     * 查询全部关注演员。
+     * 查询全部关注演员（附带演员 ID 与头像）。
+     *
+     * <p>头像不走「按名字搜索演员」：javbus 的演员头像文件名是固定的 {@code {starId}_a.jpg}，
+     * 本地图片存在就直接返回 {@code /pic/...}，否则退回数据库里的远程地址由前端兜底。
+     * 这样打开页面只有一次 {@code /follow/actors} 请求，不会按演员逐个发搜索请求。</p>
      */
     public List<JavbusFollowActor> listFollowActors() {
-        return followActorMapper.list();
+        List<JavbusFollowActor> rows = followActorMapper.list();
+        if (rows == null) {
+            return new ArrayList<>();
+        }
+        for (JavbusFollowActor row : rows) {
+            resolveFollowAvatar(row);
+        }
+        return rows;
+    }
+
+    /** 关注演员头像：本地文件存在就用本地地址；同名演员换一个有本地文件的 id。 */
+    private void resolveFollowAvatar(JavbusFollowActor row) {
+        row.setAvatarLocal(localAvatarUrl(row.getStarId()));
+        if (row.getAvatarLocal() != null || StringUtils.isBlank(row.getActorName())) {
+            return;
+        }
+        // 同名演员可能有多条记录（如 小花のん 的 y29 / yoy），换一条有本地头像的
+        List<String> ids = starMapper.findIdsByName(row.getActorName());
+        if (ids == null) {
+            return;
+        }
+        for (String id : ids) {
+            String local = localAvatarUrl(id);
+            if (local != null) {
+                row.setStarId(id);
+                row.setAvatarLocal(local);
+                return;
+            }
+        }
+    }
+
+    /** 本地头像文件存在时返回可访问地址（{starId}_a.jpg 是 javbus 的固定命名），否则 null。 */
+    private String localAvatarUrl(String starId) {
+        if (StringUtils.isBlank(starId)) {
+            return null;
+        }
+        String fileName = starId + "_a.jpg";
+        if (!imageDownloadService.checkImageExists(fileName)) {
+            return null;
+        }
+        return ImageDownloadService.normalizeAccessUrl("/pic/" + fileName);
     }
 
     /**

@@ -15,10 +15,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -150,7 +152,8 @@ class EmbyMovieServiceTest {
         void nullEmbyResultThrowsAndKeepsOldData() {
             when(embyMovieChecker.getAllMovieFromEmby()).thenReturn(null);
 
-            IllegalStateException ex = assertThrows(IllegalStateException.class, this::invokeSyncFromEmbyForTest);
+            // Executable.execute() 声明为 throws Throwable，lambda 可以直接抛出去，无需额外包装
+            IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeSyncFromEmby());
             assertTrue(ex.getMessage().contains("Emby 拉取失败"), "异常信息应说明拉取失败：" + ex.getMessage());
             verify(embyMovieMapper, never()).deleteAll();
             verify(embyMovieMapper, never()).insertBatch(anyList());
@@ -163,21 +166,10 @@ class EmbyMovieServiceTest {
             when(embyMovieChecker.getAllMovieFromEmby()).thenReturn(Collections.singletonList("ssis-406"));
             when(embyMovieMapper.insertBatch(anyList())).thenThrow(new RuntimeException("db down"));
 
-            RuntimeException ex = assertThrows(RuntimeException.class, this::invokeSyncFromEmbyForTest);
+            RuntimeException ex = assertThrows(RuntimeException.class, () -> invokeSyncFromEmby());
             assertEquals("db down", ex.getMessage());
             verify(transactionManager).rollback(any());
             verify(transactionManager, never()).commit(any());
-        }
-
-        /** assertThrows 的回调适配：把 Throwable 收敛掉，避免每个用例重复 try/catch。 */
-        private void invokeSyncFromEmbyForTest() {
-            try {
-                invokeSyncFromEmby();
-            } catch (RuntimeException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
-            }
         }
     }
 
@@ -293,12 +285,87 @@ class EmbyMovieServiceTest {
         }
 
         @Test
+        @DisplayName("缓存查询返回 null：返回空集合，不抛 NPE")
+        void nullCodesFromMapperReturnsEmptySet() {
+            when(embyMovieMapper.selectLastSyncAt()).thenReturn(today());
+            when(embyMovieMapper.selectAllCodes()).thenReturn(null);
+
+            Set<String> codes = service.getCodes();
+
+            assertTrue(codes.isEmpty());
+            verify(embyMovieChecker, never()).getAllMovieFromEmby();
+        }
+
+        @Test
         @DisplayName("功能关闭：返回空集合，不查库")
         void disabledReturnsEmptySet() {
             ReflectionTestUtils.setField(service, "enabled", false);
 
             assertTrue(service.getCodes().isEmpty());
             verifyNoInteractions(embyMovieChecker, embyMovieMapper, transactionManager);
+        }
+    }
+
+    @Nested
+    @DisplayName("进程内当日缓存")
+    class InMemoryCache {
+
+        @Test
+        @DisplayName("同一天第二次 getCodes 命中进程内缓存，不再查库")
+        void secondCallHitsCache() {
+            when(embyMovieMapper.selectLastSyncAt()).thenReturn(today());
+            when(embyMovieMapper.selectAllCodes()).thenReturn(Collections.singletonList("SSIS-406"));
+
+            Set<String> first = service.getCodes();
+            Set<String> second = service.getCodes();
+
+            assertEquals(first, second);
+            assertTrue(second.contains("SSIS-406"));
+            verify(embyMovieMapper, times(1)).selectAllCodes();
+            verify(embyMovieMapper, times(1)).selectLastSyncAt();
+        }
+
+        @Test
+        @DisplayName("syncNow 之后进程内缓存同步刷新，无需再查库就能看到新清单")
+        void syncNowRefreshesCache() {
+            when(embyMovieMapper.selectLastSyncAt()).thenReturn(today());
+            when(embyMovieMapper.selectAllCodes()).thenReturn(Collections.singletonList("OLD-001"));
+            assertEquals(Collections.singleton("OLD-001"), service.getCodes());
+
+            when(embyMovieChecker.getAllMovieFromEmby()).thenReturn(Arrays.asList("NEW-001", "new-002"));
+            when(embyMovieMapper.selectAllCodes()).thenReturn(Arrays.asList("NEW-001", "NEW-002"));
+            service.syncNow();
+
+            Set<String> codes = service.getCodes();
+            assertEquals(new HashSet<>(Arrays.asList("NEW-001", "NEW-002")), codes);
+            // getCodes 一次 + syncNow 内 reloadCodes 一次
+            verify(embyMovieMapper, times(2)).selectAllCodes();
+        }
+
+        @Test
+        @DisplayName("跨天后进程内缓存失效，重新查库")
+        void cacheExpiresAcrossDays() {
+            when(embyMovieMapper.selectLastSyncAt()).thenReturn(today());
+            when(embyMovieMapper.selectAllCodes()).thenReturn(Collections.singletonList("SSIS-406"));
+            service.getCodes();
+
+            // 把缓存日期改成昨天，模拟隔天启动
+            ReflectionTestUtils.setField(service, "cachedAt", LocalDate.now().minusDays(1));
+
+            assertEquals(Collections.singleton("SSIS-406"), service.getCodes());
+            verify(embyMovieMapper, times(2)).selectAllCodes();
+        }
+
+        @Test
+        @DisplayName("查上次同步时间抛异常：不往外抛，降级返回库里的旧数据")
+        void selectLastSyncAtFailureFallsBack() {
+            when(embyMovieMapper.selectLastSyncAt()).thenThrow(new RuntimeException("db down"));
+            when(embyMovieMapper.selectAllCodes()).thenReturn(Collections.singletonList("SSIS-406"));
+
+            Set<String> codes = service.getCodes();
+
+            assertEquals(Collections.singleton("SSIS-406"), codes);
+            verify(embyMovieChecker, never()).getAllMovieFromEmby();
         }
     }
 

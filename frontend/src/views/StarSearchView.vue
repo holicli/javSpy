@@ -307,16 +307,15 @@ function backToSearch() {
     movies.value = []
 }
 
-/** 关注演员的头像：匹配到 star 记录时用它的图，否则首字母占位。 */
+/** 关注演员的头像：后端已按 starId 给出本地地址（/pic/xxx_a.jpg），没有才退回远程地址。 */
 function followAvatar(item) {
-    const star = item.star
-    return (star && (star.avatarLocal || star.avatar)) || ''
+    return item.avatarLocal || item.avatar || ''
 }
 
 /**
  * 加载关注的演员。
- * 关注表只有演员名、没有 starId，所以入库后按名字去 javbus_star 匹配一次；
- * 匹配到的 starId 让点击卡片能直接列影片，不用再查一次。
+ * 只发一次 /follow/actors：后端已经通过 star 表左连接返回 starId 与头像，
+ * 不再按演员逐个请求 /stars/search。
  */
 async function loadFollows() {
     followLoading.value = true
@@ -327,10 +326,11 @@ async function loadFollows() {
             id: row.id,
             name: row.actorName,
             remark: row.remark,
-            star: null
+            starId: row.starId || null,
+            avatar: row.avatar || null,
+            avatarLocal: row.avatarLocal || null
         }))
         followNames.value = new Set(follows.value.map((item) => item.name))
-        enrichFollows()
     } catch (e) {
         ElMessage.error('加载关注演员失败：' + e.message)
     } finally {
@@ -338,29 +338,10 @@ async function loadFollows() {
     }
 }
 
-/** 并发补齐关注演员对应的 star 记录（限并发，失败的保留首字母占位）。 */
-async function enrichFollows() {
-    const queue = follows.value.filter((item) => !item.star)
-    const worker = async () => {
-        while (queue.length) {
-            const item = queue.shift()
-            try {
-                const res = await javbusApi.searchStars(item.name, 5)
-                const list = Array.isArray(res.data) ? res.data : []
-                item.star = list.find((star) => star.name === item.name) || list[0] || null
-            } catch {
-                /* 忽略：保持首字母占位 */
-            }
-        }
-    }
-    await Promise.all([worker(), worker(), worker()])
-    follows.value = [...follows.value]
-}
-
-/** 点击关注的演员：已匹配到 star 直接列影片，否则按名字搜一次再选。 */
+/** 点击关注的演员：有 starId 直接列影片（不再发搜索请求）；没有才按名字搜一次。 */
 async function openFollowed(item) {
-    if (item.star) {
-        selectStar(item.star)
+    if (item.starId) {
+        selectStar({ id: item.starId, name: item.name })
         return
     }
     keyword.value = item.name

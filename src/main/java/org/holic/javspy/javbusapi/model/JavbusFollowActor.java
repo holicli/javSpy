@@ -29,4 +29,13 @@ public class JavbusFollowActor implements Serializable {
 
     /** 创建时间 */
     private Date createdAt;
+
+    /** 关联演员 ID（javbus_star.id，按名字左连接得到，非本表字段） */
+    private String starId;
+
+    /** 演员头像远程地址（javbus_star.avatar，非本表字段） */
+    private String avatar;
+
+    /** 演员头像本地地址（javbus_star.avatar_local，非本表字段） */
+    private String avatarLocal;
 }

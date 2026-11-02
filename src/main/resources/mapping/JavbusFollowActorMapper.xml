@@ -3,9 +3,14 @@
 <mapper namespace="org.holic.javspy.javbusapi.mapper.JavbusFollowActorMapper">
 
     <select id="list" resultType="org.holic.javspy.javbusapi.model.JavbusFollowActor">
-        SELECT id, actor_name, remark, created_at
-        FROM javbus_follow_actor
-        ORDER BY created_at DESC, id DESC
+        SELECT f.id, f.actor_name, f.remark, f.created_at,
+               s.id           AS star_id,
+               s.avatar       AS avatar,
+               s.avatar_local AS avatar_local
+        FROM javbus_follow_actor f
+        LEFT JOIN javbus_star s
+               ON s.id = (SELECT MIN(s2.id) FROM javbus_star s2 WHERE s2.name = f.actor_name)
+        ORDER BY f.created_at DESC, f.id DESC
     </select>
 
     <insert id="insertIgnore">

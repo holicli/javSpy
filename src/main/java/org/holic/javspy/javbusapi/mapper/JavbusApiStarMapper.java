@@ -29,6 +29,9 @@ public interface JavbusApiStarMapper extends BaseMapper<JavbusApiStar> {
     List<JavbusApiStar> searchByName(@Param("name") String name,
                                      @Param("limit") int limit);
 
+    /** 按名称精确查询同名演员 ID（同名演员可能有多条记录，如小花のん 的 y29 / yoy）。 */
+    List<String> findIdsByName(@Param("name") String name);
+
     /** 查询全部演员 ID（用于批量同步详情）。 */
     List<String> selectAllIds();
 
