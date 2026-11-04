@@ -1,0 +1,19 @@
+# ============================================================
+# NAS 部署用（飞牛 OS / x86_64）
+# 镜像由 GitHub Actions 构建并推送到 GHCR，NAS 只负责拉取运行
+# ============================================================
+
+services:
+  javspy:
+    image: ghcr.io/holicli/javspy:${JAVSPY_TAG:-latest}
+    container_name: javspy
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      # 宿主机图片目录 -> 容器内 /pic（需与 .env 里的 IMAGE_STORAGE_PATH 对应）
+      - ${PIC_DIR:-./pic}:/pic

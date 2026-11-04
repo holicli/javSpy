@@ -1,0 +1,38 @@
+# 本地开发配置模板（复制为 application-local.yml 后使用）
+#
+# 使用方法：
+#   1. 复制本文件为同目录下的 application-local.yml（该文件已被 .gitignore 忽略）；
+#   2. 填好下面各项的真实值；
+#   3. IDEA 运行配置 → Spring Boot → Active profiles 填 local（或启动参数加
+#      --spring.profiles.active=local），再启动 JavspyApplication。
+#
+# 说明：仓库里的 application.yml 只保留环境变量占位，不保存任何口令；
+# 本地开发可以用这个 profile 文件覆盖，NAS 上则用 .env 注入。
+
+spring:
+    datasource:
+        url: jdbc:mariadb://192.168.0.108:33306/javspy
+        username: root
+        password: 在这里填数据库密码
+    redis:
+        host: 127.0.0.1
+        port: 6379
+        password: ""
+
+conf:
+    image:
+        storage-path: ../pic
+    emby:
+        enabled: true
+        serverUrl: http://192.168.0.108:28096
+        apiKey: 在这里填 Emby API Key
+    javbus-api:
+        base-url: http://192.168.0.108:33000
+        token: ""
+        proxy-enabled: false
+        proxy-host: 127.0.0.1
+        proxy-port: 7890
+        timeout-ms: 20000
+        request-interval-ms: 300
+        count-cache-ms: 5000
+        print-json: false
