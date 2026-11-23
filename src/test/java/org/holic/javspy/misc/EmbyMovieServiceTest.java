@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
  *     当日缓存不重复同步等）；</li>
  *     <li>{@code EmbyMovieChecker}（真正发 HTTP 的部分）与 {@code EmbyMovieMapper} 全部 mock，
  *     不依赖 Emby 服务、数据库、Redis，也不需要启动 Spring 上下文；</li>
- *     <li>{@code enabled} 字段来自 {@code @Value("${conf.emby.enabled:true}")}，脱离 Spring 时
+ *     <li>{@code enabled} 字段来自 {@code @Value("${conf.emby.enabled:false}")}，脱离 Spring 时
  *     boolean 默认是 false，所以每个用例里显式注入。</li>
  * </ul>
  */
@@ -98,6 +98,36 @@ class EmbyMovieServiceTest {
     /** 固定时间：N 天前（用于「缓存过期」分支）。 */
     private static Date daysAgo(int days) {
         return new Date(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days));
+    }
+
+    @Test
+    void failedRefreshAfterDeleteDoesNotResurrectTheOldDatabaseSnapshot() {
+        when(embyMovieMapper.selectLastSyncAt()).thenReturn(today());
+        when(embyMovieMapper.selectAllCodes()).thenReturn(List.of("ABC-123"));
+        assertTrue(service.exists("ABC-123"));
+        when(embyMovieChecker.getAllMovieFromEmby()).thenReturn(null);
+
+        service.invalidate();
+        assertFalse(service.exists("ABC-123"));
+        assertFalse(service.exists("ABC-123")); // retry is throttled
+        assertEquals(Boolean.TRUE, service.status().get("refreshPending"));
+        assertEquals(Boolean.FALSE, service.status().get("todaySynced"));
+        verify(embyMovieMapper).deleteAll();
+        verify(embyMovieMapper, times(1)).selectAllCodes();
+        verify(embyMovieChecker, times(1)).getAllMovieFromEmby();
+    }
+
+    @Test
+    void successfulManualSyncRestoresAnInvalidatedSnapshotAfterFailure() {
+        when(embyMovieChecker.getAllMovieFromEmby()).thenReturn(null, List.of("NEW-123"));
+        when(embyMovieMapper.selectAllCodes()).thenReturn(List.of("NEW-123"));
+        when(embyMovieMapper.selectLastSyncAt()).thenReturn(today());
+
+        service.invalidate();
+        assertTrue(service.getCodes().isEmpty());
+        assertTrue(service.syncNow().success);
+        assertEquals(Set.of("NEW-123"), service.getCodes());
+        assertEquals(Boolean.FALSE, service.status().get("refreshPending"));
     }
 
     @Nested

@@ -26,7 +26,7 @@ http.interceptors.response.use(
             err.response?.data?.message ||
             err.message ||
             '网络错误'
-        return Promise.reject(new Error(msg))
+        return Promise.reject(Object.assign(new Error(msg), { status: err.response?.status }))
     }
 )
 
@@ -94,6 +94,15 @@ export const javbusApi = {
     // Emby 影片清单缓存（数据库）
     embySync: () => http.post('/javbus-api/emby/sync'),
     embyStatus: () => http.get('/javbus-api/emby/status'),
+
+    // Emby 重复影片扫描 / 删除（删除会同时删掉磁盘文件）
+    embyDuplicates: (refresh = false, keyword = '') =>
+        http.get('/javbus-api/emby/duplicates', { params: { refresh, keyword } }),
+    embyDelete: (ids, adminToken) => http.post('/javbus-api/emby/delete', { ids, confirm: true }, {
+        headers: { 'X-JavSpy-Admin-Token': adminToken }
+    }),
+    embyCoverUrl: (id, maxWidth = 200, maxHeight = 280) =>
+        `/javbus-api/emby/cover?id=${encodeURIComponent(id)}&maxWidth=${maxWidth}&maxHeight=${maxHeight}`,
 
     // 演员信息批量同步（后台）
     starSync: () => http.post('/javbus-api/stars/sync'),

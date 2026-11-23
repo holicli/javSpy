@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Emby 影片存在性检查服务，基于数据库缓存（emby_movie 表）：
@@ -33,8 +34,9 @@ import java.util.Set;
 public class EmbyMovieService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbyMovieService.class);
+    private static final long RETRY_DELAY_NANOS = TimeUnit.SECONDS.toNanos(30);
 
-    @Value("${conf.emby.enabled:true}")
+    @Value("${conf.emby.enabled:false}")
     private boolean enabled;
 
     private final EmbyMovieChecker embyMovieChecker;
@@ -49,6 +51,10 @@ public class EmbyMovieService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     /** 判断番号对应的影片是否已存在于 Emby（查数据库缓存）。 */
     public boolean exists(String code) {
         if (!enabled || StringUtils.isBlank(code)) {
@@ -61,6 +67,8 @@ public class EmbyMovieService {
     private volatile Set<String> cachedCodes = null;
     /** 进程内缓存生成日期（本地时区）。 */
     private volatile LocalDate cachedAt = null;
+    private volatile boolean refreshPending;
+    private long retryAfterNanos;
 
     /**
      * 获取 Emby 中全部影片番号集合（数据库缓存 + 进程内当日缓存）。
@@ -72,10 +80,14 @@ public class EmbyMovieService {
         }
         LocalDate today = LocalDate.now();
         Set<String> cached = cachedCodes;
-        if (cached != null && today.equals(cachedAt)) {
+        if (!refreshPending && cached != null && today.equals(cachedAt)) {
             return cached;
         }
         synchronized (this) {
+            if (refreshPending) {
+                refreshInvalidatedSnapshot();
+                return refreshPending ? Collections.emptySet() : cachedCodes;
+            }
             if (cachedCodes != null && today.equals(cachedAt)) {
                 return cachedCodes;
             }
@@ -115,6 +127,32 @@ public class EmbyMovieService {
         cachedAt = LocalDate.now();
     }
 
+    /** 删除后旧快照已知不可靠，成功拉取之前不再把它用于存在性判断。 */
+    synchronized void invalidate() {
+        refreshPending = true;
+        cachedCodes = null;
+        cachedAt = null;
+        retryAfterNanos = System.nanoTime();
+        try {
+            // 这里只清理可重建的缓存表，避免进程重启后再次使用已知过期的快照。
+            embyMovieMapper.deleteAll();
+        } catch (RuntimeException e) {
+            log.warn("无法废弃数据库中的 Emby 番号快照，当前进程仍会跳过旧数据", e);
+        }
+    }
+
+    /** 删除后后台触发；失败后由下一次查询按退避时间重试。 */
+    synchronized void refreshInvalidatedSnapshot() {
+        if (!enabled || !refreshPending || System.nanoTime() - retryAfterNanos < 0) {
+            return;
+        }
+        SyncResult result = syncNow();
+        if (!result.success) {
+            retryAfterNanos = System.nanoTime() + RETRY_DELAY_NANOS;
+            log.warn("Emby 删除后的番号快照仍待同步，将在后续查询时重试");
+        }
+    }
+
     /** 手动全量同步 Emby 影片清单到数据库（覆盖更新）。 */
     public SyncResult syncNow() {
         if (!enabled) {
@@ -125,6 +163,7 @@ public class EmbyMovieService {
                 int count = syncFromEmby();
                 reloadCodes();
                 Date lastSyncAt = embyMovieMapper.selectLastSyncAt();
+                refreshPending = false;
                 return SyncResult.ok(count, lastSyncAt);
             } catch (Exception e) {
                 log.error("Emby 清单同步失败", e);
@@ -137,6 +176,8 @@ public class EmbyMovieService {
     public Map<String, Object> status() {
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("enabled", enabled);
+        boolean pending = enabled && refreshPending;
+        status.put("refreshPending", pending);
         if (!enabled) {
             status.put("count", 0);
             status.put("lastSyncAt", null);
@@ -146,7 +187,7 @@ public class EmbyMovieService {
         status.put("count", embyMovieMapper.countAll());
         Date lastSyncAt = embyMovieMapper.selectLastSyncAt();
         status.put("lastSyncAt", lastSyncAt);
-        status.put("todaySynced", isToday(lastSyncAt));
+        status.put("todaySynced", !pending && isToday(lastSyncAt));
         return status;
     }
 
