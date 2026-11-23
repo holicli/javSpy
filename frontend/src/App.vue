@@ -23,6 +23,10 @@
                     <el-icon><MagicStick /></el-icon>
                     <span>刮削中心</span>
                 </el-menu-item>
+                <el-menu-item index="/emby-duplicate">
+                    <el-icon><CopyDocument /></el-icon>
+                    <span>Emby 去重</span>
+                </el-menu-item>
             </el-menu>
             <div class="sidebar-footer">
                 <div class="emby-box">
@@ -87,6 +91,10 @@
                 <el-icon :size="20"><MagicStick /></el-icon>
                 <span>刮削</span>
             </router-link>
+            <router-link to="/emby-duplicate" class="tab" exact-active-class="tab-active">
+                <el-icon :size="20"><CopyDocument /></el-icon>
+                <span>去重</span>
+            </router-link>
         </nav>
     </div>
 
@@ -147,6 +155,10 @@ async function loadEmbyStatus() {
         const s = res.data || {}
         if (!s.enabled) {
             embyText.value = 'Emby 未启用'
+            return
+        }
+        if (s.refreshPending) {
+            embyText.value = 'Emby 已变更 · 番号待同步'
             return
         }
         embyText.value =
@@ -246,9 +258,13 @@ async function onPing() {
 onMounted(() => {
     loadEmbyStatus()
     loadStarSyncStatus()
+    window.addEventListener('javspy:emby-changed', loadEmbyStatus)
 })
 
-onBeforeUnmount(stopStarSyncPolling)
+onBeforeUnmount(() => {
+    stopStarSyncPolling()
+    window.removeEventListener('javspy:emby-changed', loadEmbyStatus)
+})
 </script>
 
 <style scoped>

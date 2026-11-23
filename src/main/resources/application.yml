@@ -10,9 +10,9 @@ spring:
     # 数据库：驱动为 mariadb-java-client（与 pom 中依赖一致）
     datasource:
         driver-class-name: org.mariadb.jdbc.Driver
-        url: jdbc:mariadb://192.168.0.108:33306/javspy
-        username: root
-        password: 123456
+        url: ${JAVSPY_DB_URL}
+        username: ${JAVSPY_DB_USERNAME}
+        password: ${JAVSPY_DB_PASSWORD:}
         hikari:
             maximum-pool-size: 500
             minimum-idle: 5
@@ -44,16 +44,18 @@ conf:
         storage-path: ../pic
 
     emby:
-        # 关闭后不查 Emby，也不做影片存在性标记
-        enabled: true
-        serverUrl: http://192.168.0.108:28096
-        apiKey: bd87f9a3632e4e409314ae45f71d99db
+        # 未显式启用时不访问 Emby，也不做影片存在性标记
+        enabled: ${JAVSPY_EMBY_ENABLED:false}
+        serverUrl: ${JAVSPY_EMBY_URL:}
+        apiKey: ${JAVSPY_EMBY_API_KEY:}
+        # 独立的管理员令牌；留空时仅允许扫描，不允许删除
+        delete-admin-token: ${JAVSPY_EMBY_DELETE_ADMIN_TOKEN:}
 
     javbus-api:
         # 自托管 javbus-api 服务地址
         base-url: http://192.168.0.108:33000
         # 服务端开启权限校验时使用 j-auth-token 请求头
-        token: ""
+        token: ${JAVSPY_JAVBUS_TOKEN:}
         # 代理总开关：javbus-api 为局域网服务可直连；下载 javbus 封面/头像需要代理时打开
         proxy-enabled: true
         proxy-host: 127.0.0.1

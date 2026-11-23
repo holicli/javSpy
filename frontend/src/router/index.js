@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import MovieListView from '@/views/MovieListView.vue'
 import NewestView from '@/views/NewestView.vue'
+import EmbyDuplicateView from '@/views/EmbyDuplicateView.vue'
 import ScrapeCenterView from '@/views/ScrapeCenterView.vue'
 import StarSearchView from '@/views/StarSearchView.vue'
 
@@ -11,7 +12,8 @@ const router = createRouter({
         { path: '/', name: 'movies', component: MovieListView, meta: { title: '影片库' } },
         { path: '/newest', name: 'newest', component: NewestView, meta: { title: '最新入库' } },
         { path: '/star', name: 'star', component: StarSearchView, meta: { title: '演员搜索' } },
-        { path: '/scrape', name: 'scrape', component: ScrapeCenterView, meta: { title: '刮削中心' } }
+        { path: '/scrape', name: 'scrape', component: ScrapeCenterView, meta: { title: '刮削中心' } },
+        { path: '/emby-duplicate', name: 'embyDuplicate', component: EmbyDuplicateView, meta: { title: 'Emby 去重' } }
     ]
 })
 
