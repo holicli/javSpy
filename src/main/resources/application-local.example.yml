@@ -26,6 +26,7 @@ conf:
         enabled: true
         serverUrl: http://192.168.0.108:28096
         apiKey: 在这里填 Emby API Key
+        delete-admin-token: ""
     javbus-api:
         base-url: http://192.168.0.108:33000
         token: ""

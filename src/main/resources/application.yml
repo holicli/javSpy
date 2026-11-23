@@ -51,6 +51,8 @@ conf:
         enabled: ${EMBY_ENABLED:true}
         serverUrl: ${EMBY_URL:http://192.168.0.108:28096}
         apiKey: ${EMBY_API_KEY:}
+        # Emby 去重页“永久删除”的管理员令牌；留空时只能查看
+        delete-admin-token: ${EMBY_DELETE_ADMIN_TOKEN:}
 
     javbus-api:
         # 自托管 javbus-api 服务地址
