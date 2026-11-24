@@ -5,19 +5,16 @@ spring:
 
     # Redis：MyBatis 缓存 / ShedLock 分布式锁 / RedisTemplate 使用
     redis:
-        host: ${REDIS_HOST:127.0.0.1}
-        port: ${REDIS_PORT:6379}
-        password: ${REDIS_PASSWORD:}
+        host: 127.0.0.1
 
     # 数据库：驱动为 mariadb-java-client（与 pom 中依赖一致）
-    # 注意：仓库是公开的，连接信息/口令一律走环境变量，不要写死在这里。
     datasource:
         driver-class-name: org.mariadb.jdbc.Driver
-        url: jdbc:mariadb://${DB_HOST:192.168.0.108}:${DB_PORT:33306}/${DB_NAME:javspy}
-        username: ${DB_USER:root}
-        password: ${DB_PASSWORD:}
+        url: ${JAVSPY_DB_URL}
+        username: ${JAVSPY_DB_USERNAME}
+        password: ${JAVSPY_DB_PASSWORD:}
         hikari:
-            maximum-pool-size: ${DB_POOL_SIZE:20}
+            maximum-pool-size: 500
             minimum-idle: 5
             connection-timeout: 30000
             idle-timeout: 600000
@@ -26,7 +23,7 @@ spring:
             connection-test-query: SELECT 1
 
 server:
-    port: ${SERVER_PORT:8084}
+    port: 18086
 
 mybatis-plus:
     mapper-locations: classpath*:/mapping/*.xml
@@ -36,38 +33,38 @@ mybatis-plus:
         # 列为 NULL 时也调用 setter（列表展示依赖该行为判断"无数据"）
         call-setters-on-nulls: true
         auto-mapping-unknown-column-behavior: warning
-        # 控制台打印 SQL；生产环境建议改为 org.apache.ibatis.logging.nologging.NoLoggingImpl
-        log-impl: ${MYBATIS_LOG_IMPL:org.apache.ibatis.logging.stdout.StdOutImpl}
+        # 控制台打印 SQL；生产环境建议改为 nologging.NoLoggingImpl 或 slf4j
+        log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
     global-config:
         banner: false
 
 conf:
     image:
-        # 图片存储目录（相对路径基于应用启动目录）；容器内固定挂载到 /pic
-        storage-path: ${IMAGE_STORAGE_PATH:../pic}
+        # 图片存储目录（相对路径基于应用启动目录）；服务器上建议用绝对路径
+        storage-path: ../pic
 
     emby:
-        # 关闭后不查 Emby，也不做影片存在性标记
-        enabled: ${EMBY_ENABLED:true}
-        serverUrl: ${EMBY_URL:http://192.168.0.108:28096}
-        apiKey: ${EMBY_API_KEY:}
-        # Emby 去重页“永久删除”的管理员令牌；留空时只能查看
-        delete-admin-token: ${EMBY_DELETE_ADMIN_TOKEN:}
+        # 未显式启用时不访问 Emby，也不做影片存在性标记
+        enabled: ${JAVSPY_EMBY_ENABLED:true}
+        serverUrl: ${JAVSPY_EMBY_URL:}
+        apiKey: ${JAVSPY_EMBY_API_KEY:}
+        # 独立的管理员令牌；留空时仅允许扫描，不允许删除
+        delete-admin-token: ${JAVSPY_EMBY_DELETE_ADMIN_TOKEN:}
 
     javbus-api:
         # 自托管 javbus-api 服务地址
-        base-url: ${JAVBUS_API_URL:http://192.168.0.108:33000}
+        base-url: http://192.168.0.108:33000
         # 服务端开启权限校验时使用 j-auth-token 请求头
-        token: ${JAVBUS_API_TOKEN:}
+        token: ${JAVSPY_JAVBUS_TOKEN:}
         # 代理总开关：javbus-api 为局域网服务可直连；下载 javbus 封面/头像需要代理时打开
-        proxy-enabled: ${JAVBUS_API_PROXY_ENABLED:false}
-        proxy-host: ${JAVBUS_API_PROXY_HOST:127.0.0.1}
-        proxy-port: ${JAVBUS_API_PROXY_PORT:7890}
+        proxy-enabled: true
+        proxy-host: 127.0.0.1
+        proxy-port: 7890
         # 单次请求超时（毫秒）
-        timeout-ms: ${JAVBUS_API_TIMEOUT_MS:20000}
+        timeout-ms: 20000
         # 两次请求间隔（毫秒），避免请求过快
-        request-interval-ms: ${JAVBUS_API_REQUEST_INTERVAL_MS:300}
+        request-interval-ms: 300
         # 影片总数短时缓存（毫秒）：列表翻页时避免重复 COUNT，0 表示关闭
         count-cache-ms: 5000
         # 是否打印返回的 JSON 到控制台（调试用）
-        print-json: ${JAVBUS_API_PRINT_JSON:false}
+        print-json: false
