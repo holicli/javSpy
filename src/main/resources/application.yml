@@ -23,7 +23,7 @@ spring:
             connection-test-query: SELECT 1
 
 server:
-    port: 8084
+    port: 18086
 
 mybatis-plus:
     mapper-locations: classpath*:/mapping/*.xml
@@ -45,7 +45,7 @@ conf:
 
     emby:
         # 未显式启用时不访问 Emby，也不做影片存在性标记
-        enabled: ${JAVSPY_EMBY_ENABLED:false}
+        enabled: ${JAVSPY_EMBY_ENABLED:true}
         serverUrl: ${JAVSPY_EMBY_URL:}
         apiKey: ${JAVSPY_EMBY_API_KEY:}
         # 独立的管理员令牌；留空时仅允许扫描，不允许删除

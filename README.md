@@ -18,6 +18,37 @@
 
 如果曾经提交过有效的数据库密码或 Emby 密钥，请先轮换，再用新凭据部署。
 
+### Linux：生成并加载环境变量文件
+
+从项目根目录运行脚本，用实际的数据库主机、库名和应用账号填写。密码和令牌输入时不回显，
+配置文件权限为 `600`。脚本只写配置，不连接数据库或启动服务。
+
+```bash
+sudo bash scripts/configure-env.sh
+```
+
+默认写到 `/etc/javspy/javspy.env`。如果已有 `javspy.service`，用 `sudo systemctl edit javspy`
+添加以下配置，与现有的启动命令配合使用：
+
+```ini
+[Service]
+EnvironmentFile=/etc/javspy/javspy.env
+```
+
+然后执行 `sudo systemctl daemon-reload` 和 `sudo systemctl restart javspy`。
+
+如果不用 systemd，可以把文件写到当前用户的配置目录，再由 Bash 加载并启动已构建的 JAR：
+
+```bash
+bash scripts/configure-env.sh "$HOME/.config/javspy/javspy.env"
+(
+    set -a
+    source "$HOME/.config/javspy/javspy.env"
+    set +a
+    exec java -jar target/javspy-0.0.1-SNAPSHOT.jar
+)
+```
+
 ## Emby 去重
 
 使用 HTTPS 访问 JavSpy。执行永久删除时输入独立的管理员令牌；页面不会保存它。
