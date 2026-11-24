@@ -13,10 +13,13 @@ import org.holic.javspy.javbusapi.model.JavbusFollowActor;
 import org.holic.javspy.javbusapi.service.JavbusApiService;
 import org.holic.javspy.misc.EmbyMovieService;
 import org.holic.javspy.misc.WebResult;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
 import java.util.Map;
@@ -212,6 +215,21 @@ public class JavbusApiController {
         }
     }
 
+    /** 按影片和预览图 ID 加载详情图片。 */
+    @GetMapping("/movie/image")
+    public ResponseEntity<Void> movieImage(
+            @RequestParam("code") String code,
+            @RequestParam(value = "sampleId", required = false) Long sampleId,
+            @RequestParam(value = "thumbnail", defaultValue = "false") boolean thumbnail) {
+        String localUrl = service.movieImage(code, sampleId, thumbnail);
+        if (localUrl == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(UriComponentsBuilder.fromPath(localUrl).build().encode().toUri())
+                .build();
+    }
+
     /** 演员详情：GET /javbus-api/star?id=2xi&type=normal */
     @GetMapping("/star")
     public WebResult<JavbusApiStarDetail> starDetail(
@@ -338,18 +356,22 @@ public class JavbusApiController {
         }
     }
 
-    /** 刷新单部影片磁力（重拉 javbus-api 增量入库）：
+    /** 刷新单部影片磁力：
      * POST /javbus-api/magnets/refresh?code=SSIS-406
-     * 返回 {code, before, after, added} */
+     * 返回 {code, before, after, added}，未入库影片另返回 magnets */
     @org.springframework.web.bind.annotation.PostMapping("/magnets/refresh")
     public WebResult<Map<String, Object>> refreshMagnets(
             @org.springframework.web.bind.annotation.RequestParam("code") String code) {
         try {
             Map<String, Object> data = service.refreshMagnets(code);
             int added = ((Number) data.getOrDefault("added", 0)).intValue();
+            String message = added > 0 ? "更新磁力完成，新增 " + added + " 条" : "已是最新，无新增磁力";
+            if (data.containsKey("magnets")) {
+                message = "已从 JavBus 获取 " + data.get("after") + " 条磁力";
+            }
             return WebResult.<Map<String, Object>>builder()
                     .success(true).data(data)
-                    .message(added > 0 ? "更新磁力完成，新增 " + added + " 条" : "已是最新，无新增磁力").build();
+                    .message(message).build();
         } catch (Exception e) {
             return WebResult.<Map<String, Object>>builder()
                     .success(false).message(e.getMessage()).build();

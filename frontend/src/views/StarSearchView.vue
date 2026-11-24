@@ -210,7 +210,13 @@
                         :key="row.code"
                         :movie="row"
                         @open-detail="openDetail"
-                    />
+                    >
+                        <template #actions>
+                            <el-button size="small" type="success" plain @click.stop="openMagnets(row.code)">
+                                磁力
+                            </el-button>
+                        </template>
+                    </MobileMovieCard>
                 </div>
                 <div v-if="movies.length === 0 && !movieLoading" class="mobile-empty">
                     该演员暂无影片
@@ -408,7 +414,7 @@ function openMagnets(code) {
     magnetVisible.value = true
 }
 
-/** 行内更新磁力：重拉 javbus 增量入库，成功后刷新该行磁力数量。 */
+/** 行内更新磁力：重新拉取 JavBus 磁力并刷新该行数量。 */
 async function refreshMagnetsOf(code) {
     if (refreshingCode.value) return
     refreshingCode.value = code

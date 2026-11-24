@@ -10,13 +10,22 @@
         </foreach>
     </insert>
 
-    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovieSample">
+    <sql id="samplesByCode">
         SELECT s.id, s.movie_id AS movieId, s.sample_id AS sampleId, s.alt AS alt,
                s.src AS src, s.thumbnail AS thumbnail, s.created_at AS createdAt
         FROM javbus_movie_sample s
         JOIN javbus_movie m ON m.id = s.movie_id
         WHERE m.code = #{code}
+    </sql>
+
+    <select id="findByCode" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovieSample">
+        <include refid="samplesByCode"/>
         ORDER BY s.id ASC
+    </select>
+
+    <select id="findByCodeAndId" resultType="org.holic.javspy.javbusapi.model.JavbusApiMovieSample">
+        <include refid="samplesByCode"/>
+          AND s.id = #{id}
     </select>
 
     <delete id="deleteByMovieId">

@@ -24,9 +24,20 @@
         <!-- 正常详情 -->
         <template v-else>
             <div class="detail-body">
-                <div class="movie-main">
+                <div v-if="coverPreview.length || samples.length" class="image-controls">
+                    <el-button size="small" @click="showLargeImages = !showLargeImages">
+                        {{ showLargeImages ? '隐藏大图' : '显示大图' }}
+                    </el-button>
+                </div>
+                <div class="movie-main" :class="{ 'movie-main--large': showLargeCover }">
                     <div class="movie-cover">
-                        <el-image :src="movie.coverUrl" fit="cover" class="movie-cover-img" lazy>
+                        <el-image
+                            :src="showLargeCover ? coverPreview[0] : javbusApi.movieImageUrl(movie.code, null, true)"
+                            :preview-src-list="coverPreview"
+                            :fit="showLargeCover ? 'contain' : 'cover'"
+                            class="movie-cover-img"
+                            preview-teleported
+                        >
                             <template #error>
                                 <div class="cover-fallback-lg">无封面</div>
                             </template>
@@ -72,14 +83,14 @@
 
                 <div class="section">
                     <div class="section-title">预览图（点击查看大图）</div>
-                    <div v-if="data.samples && data.samples.length" class="sample-grid">
+                    <div v-if="samples.length" class="sample-grid" :class="{ 'sample-grid--large': showLargeImages }">
                         <el-image
-                            v-for="(s, i) in data.samples"
-                            :key="i"
-                            :src="s.thumbnail || s.src"
+                            v-for="(s, i) in samples"
+                            :key="s.id"
+                            :src="showLargeImages ? sampleSrcList[i] : javbusApi.movieImageUrl(movie.code, s.id, true)"
                             :preview-src-list="sampleSrcList"
                             :initial-index="i"
-                            fit="cover"
+                            :fit="showLargeImages ? 'contain' : 'cover'"
                             class="sample-img"
                             lazy
                             preview-teleported
@@ -130,6 +141,7 @@ const loading = ref(false)
 const error = ref('')
 const data = ref(null)
 const scraping = ref(false)
+const showLargeImages = ref(false)
 
 const magnetVisible = ref(false)
 const starVisible = ref(false)
@@ -140,12 +152,20 @@ const movie = computed(() => (data.value && data.value.movie) || {})
 const dialogTitle = computed(() =>
     movie.value.code ? movie.value.code + ' 影片详情' : '影片详情'
 )
+const coverPreview = computed(() =>
+    movie.value.coverHd ? [javbusApi.movieImageUrl(movie.value.code)] : []
+)
+const showLargeCover = computed(() => showLargeImages.value && coverPreview.value.length > 0)
+const samples = computed(() => (data.value?.samples || []).filter((s) => s.src || s.thumbnail))
 const sampleSrcList = computed(() =>
-    (data.value?.samples || []).map((s) => s.src || s.thumbnail).filter(Boolean)
+    samples.value.map((s) => javbusApi.movieImageUrl(movie.value.code, s.id, !s.src))
 )
 
 watch(visible, (v) => {
-    if (v) load()
+    if (v) {
+        showLargeImages.value = false
+        load()
+    }
 })
 
 async function load() {
@@ -189,6 +209,12 @@ function openMagnets() {
 <style scoped>
 .detail-body {
     min-height: 200px;
+}
+
+.image-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
 }
 
 .movie-main {
@@ -302,5 +328,31 @@ function openMagnets() {
     .sample-img {
         height: 90px;
     }
+}
+
+.movie-main--large {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.movie-main--large .movie-cover-img,
+.movie-main--large .cover-fallback-lg {
+    width: 100%;
+    height: clamp(210px, 52vh, 480px);
+}
+
+.sample-grid--large {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.sample-grid--large .sample-img {
+    height: auto;
+    min-height: 90px;
+}
+
+.sample-grid--large .sample-img :deep(.el-image__inner) {
+    display: block;
+    height: auto;
+    max-height: 65vh;
 }
 </style>

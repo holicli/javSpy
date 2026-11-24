@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -213,7 +214,11 @@ public class JavbusApiClient {
         if (StringUtils.isBlank(movieId)) {
             return null;
         }
-        String json = get(baseUrl + "/api/movies/" + movieId.trim());
+        HttpUrl url = HttpUrl.get(baseUrl).newBuilder()
+                .addPathSegments("api/movies")
+                .addPathSegment(movieId.trim())
+                .build();
+        String json = get(url.toString());
         if (StringUtils.isBlank(json)) {
             return null;
         }
@@ -340,10 +345,13 @@ public class JavbusApiClient {
         if (StringUtils.isBlank(movieId) || StringUtils.isBlank(gid)) {
             return magnets;
         }
-        String url = baseUrl + "/api/magnets/" + movieId.trim()
-                + "?gid=" + gid.trim()
-                + "&uc=" + (StringUtils.isBlank(uc) ? "0" : uc.trim());
-        String json = get(url);
+        HttpUrl url = HttpUrl.get(baseUrl).newBuilder()
+                .addPathSegments("api/magnets")
+                .addPathSegment(movieId.trim())
+                .addQueryParameter("gid", gid.trim())
+                .addQueryParameter("uc", StringUtils.defaultIfBlank(uc, "0").trim())
+                .build();
+        String json = get(url.toString());
         if (StringUtils.isBlank(json)) {
             return magnets;
         }

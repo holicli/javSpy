@@ -19,6 +19,7 @@
 | `EMBY_DELETE_ADMIN_TOKEN` | Emby 去重页“永久删除”的管理员令牌；留空时只能查看 |
 | `JAVBUS_API_URL` / `JAVBUS_API_TOKEN` | 自托管 JavBus API 地址与鉴权 |
 | `JAVBUS_API_PROXY_ENABLED` / `JAVBUS_API_PROXY_HOST` / `JAVBUS_API_PROXY_PORT` | 下载封面时的代理 |
+| `JAVSPY_QBITTORRENT_URL` / `JAVSPY_QBITTORRENT_USERNAME` / `JAVSPY_QBITTORRENT_PASSWORD` | 磁力弹窗「下载」使用的 qBittorrent WebUI 连接 |
 | `IMAGE_STORAGE_PATH` / `PIC_DIR` | 容器内图片目录 / 宿主机挂载目录 |
 | `MYBATIS_LOG_IMPL` | SQL 日志实现；生产建议 `org.apache.ibatis.logging.nologging.NoLoggingImpl` |
 | `JAVA_TOOL_OPTIONS` | JVM 参数 |
@@ -59,6 +60,21 @@ java -jar target/javspy-0.0.1-SNAPSHOT.jar
 长期运行建议用 systemd，把变量写入 `/etc/javspy.env` 并配置 `EnvironmentFile=`。
 
 如果曾经提交过有效的数据库密码或 Emby 密钥，请先轮换，再用新凭据部署。
+
+### qBittorrent 下载
+
+在磁力弹窗点击「下载」后，JavSpy 会按影片番号匹配 qBittorrent 的任务名称和标签。已有同番号的任务
+时提示「已存在」。新任务带番号标签，保存位置使用 qBittorrent 的默认设置。
+Docker Compose 部署时，在 NAS 上的 `.env` 配置上表的三个 qBittorrent 环境变量。
+本地运行也可以在启动目录放置 `application-qbittorrent-local.yml`：
+
+```yaml
+javspy:
+    qbittorrent:
+        url: http://192.168.0.108:8085
+        username: admin
+        password: "在此填入 WebUI 密码"
+```
 
 ### Linux：生成并加载环境变量文件
 

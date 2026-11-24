@@ -24,6 +24,7 @@
                 <span v-if="movie.duration">{{ movie.duration }}分</span>
                 <span v-if="movie.actors" class="actors" :title="movie.actors">{{ movie.actors }}</span>
             </div>
+            <slot name="actions" />
         </div>
     </div>
 </template>
