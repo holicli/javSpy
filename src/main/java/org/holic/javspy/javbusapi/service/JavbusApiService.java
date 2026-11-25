@@ -26,11 +26,13 @@ import org.holic.javspy.misc.EmbyMovieService;
 import org.holic.javspy.misc.ImageDownloadService;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -655,6 +657,45 @@ public class JavbusApiService {
         return detail;
     }
 
+    /** 按影片记录加载图片，复用本地缓存并在原图不可用时尝试另一尺寸。 */
+    public String movieImage(String code, Long sampleId, boolean thumbnail) {
+        if (StringUtils.isBlank(code)) {
+            return null;
+        }
+        String c = code.trim().toUpperCase(Locale.ROOT);
+        if (sampleId != null) {
+            JavbusApiMovieSample sample = movieSampleMapper.findByCodeAndId(c, sampleId);
+            if (sample == null) {
+                return null;
+            }
+            return thumbnail ? resolveMovieImage(sample.getThumbnail(), sample.getSrc())
+                    : resolveMovieImage(sample.getSrc(), sample.getThumbnail());
+        }
+        JavbusApiMovie movie = movieMapper.findByCode(c);
+        if (movie == null) {
+            return null;
+        }
+        return thumbnail ? resolveMovieImage(movie.getCoverLocal(), movie.getCoverUrl(), movie.getCoverHd())
+                : resolveMovieImage(movie.getCoverHd(), movie.getCoverLocal(), movie.getCoverUrl());
+    }
+
+    private String resolveMovieImage(String... sources) {
+        for (String source : sources) {
+            if (StringUtils.isBlank(source)) {
+                continue;
+            }
+            try {
+                String localUrl = imageDownloadService.getCachedImageUrl(source, "https://www.javbus.com/");
+                if (localUrl != null) {
+                    return localUrl;
+                }
+            } catch (IOException e) {
+                log.warn("javbus-api 详情图片加载失败, url={}", source, e);
+            }
+        }
+        return null;
+    }
+
     /**
      * 演员详情：先查本地表，查不到时尝试从 javbus API 拉取并入库。
      */
@@ -880,64 +921,60 @@ public class JavbusApiService {
     /**
      * 查询某部影片的全部磁力链接（含相关信息）。
      */
-    public List<JavbusApiMagnet> magnetsByCode(String code) {
+    public List<JavbusApiMagnet> magnetsByCode(String code) throws Exception {
         if (StringUtils.isBlank(code)) {
             throw new IllegalArgumentException("番号不能为空");
         }
-        return magnetMapper.findByCode(code.trim().toUpperCase());
+        String c = code.trim().toUpperCase(Locale.ROOT);
+        List<JavbusApiMagnet> stored = magnetMapper.findByCode(c);
+        if (!stored.isEmpty() || movieMapper.findByCode(c) != null) {
+            return stored;
+        }
+        return fetchMagnets(c, null);
     }
 
     /**
-     * 刷新单部影片的磁力链接：重新调 javbus-api /api/magnets/{code} 拉取最新磁力，
-     * 按链接去重增量入库（INSERT IGNORE，保留旧磁力、只补新增）。
+     * 刷新单部影片的磁力链接。已入库影片增量保存，未入库影片直接返回实时结果。
      *
-     * @return {code, before, after, added}
+     * @return {code, before, after, added}，未入库影片另返回 magnets
      */
     public Map<String, Object> refreshMagnets(String code) {
         if (StringUtils.isBlank(code)) {
             throw new IllegalArgumentException("番号不能为空");
         }
-        String c = code.trim().toUpperCase();
+        String c = code.trim().toUpperCase(Locale.ROOT);
         JavbusApiMovie movie = movieMapper.findByCode(c);
-        if (movie == null) {
-            throw new IllegalArgumentException("影片尚未入库，无法刷新磁力：" + c);
-        }
-        int before = magnetMapper.countByCode(c);
         try {
-            // 详情里带 gid/uc，磁力接口需要它们；DB 里可能存过，优先用，缺失则重新抓详情
-            String gid = movie.getGid();
-            String uc = movie.getUc();
-            List<JavbusApiMagnet> fresh = new ArrayList<>();
-            if (StringUtils.isNotBlank(gid)) {
-                fresh = apiClient.getMagnets(c, gid, uc);
-            } else {
-                JavbusApiScrapeResult detail = apiClient.scrapeMovie(c);
-                if (detail != null && detail.getMovie() != null
-                        && StringUtils.isNotBlank(detail.getMovie().getGid())) {
-                    fresh = apiClient.getMagnets(c, detail.getMovie().getGid(),
-                            detail.getMovie().getUc());
-                }
+            if (movie == null) {
+                List<JavbusApiMagnet> fresh = fetchMagnets(c, null);
+                return Map.of("code", c, "before", 0, "after", fresh.size(), "added", 0, "magnets", fresh);
             }
-            if (fresh != null && !fresh.isEmpty()) {
+            int before = magnetMapper.countByCode(c);
+            List<JavbusApiMagnet> fresh = fetchMagnets(c, movie);
+            if (!fresh.isEmpty()) {
                 for (JavbusApiMagnet magnet : fresh) {
-                    if (magnet != null) {
-                        magnet.setCode(c);
-                        magnet.setMovieId(movie.getId());
-                    }
+                    magnet.setCode(c);
+                    magnet.setMovieId(movie.getId());
                 }
                 magnetMapper.insertBatch(fresh); // 按 link 唯一键 IGNORE，只补新增
             }
+            int after = magnetMapper.countByCode(c);
+            return Map.of("code", c, "before", before, "after", after, "added", after - before);
         } catch (Exception e) {
             log.warn("javbus-api 刷新磁力失败, code={}", c, e);
             throw new RuntimeException("刷新磁力失败: " + e.getMessage(), e);
         }
-        int after = magnetMapper.countByCode(c);
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", c);
-        result.put("before", before);
-        result.put("after", after);
-        result.put("added", after - before);
-        return result;
+    }
+
+    private List<JavbusApiMagnet> fetchMagnets(String code, JavbusApiMovie movie) throws Exception {
+        JavbusApiMovie source = movie;
+        if (source == null || StringUtils.isBlank(source.getGid())) {
+            source = apiClient.getMovieDetail(code);
+        }
+        if (source == null) {
+            throw new IOException("JavBus 未返回影片详情：" + code);
+        }
+        return apiClient.getMagnets(StringUtils.defaultIfBlank(source.getCode(), code), source.getGid(), source.getUc());
     }
 
     /**

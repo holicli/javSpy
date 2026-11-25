@@ -45,17 +45,27 @@
                 <el-table-column label="字幕" width="60" align="center">
                     <template #default="{ row }">{{ row.subtitle ? '是' : '—' }}</template>
                 </el-table-column>
-                <el-table-column label="操作" width="200" align="center" fixed="right">
+                <el-table-column label="操作" :width="isMobile ? 132 : 264" align="center" fixed="right">
                     <template #default="{ row }">
-                        <el-button size="small" type="warning" plain @click="stage(row)">
-                            暂存
-                        </el-button>
-                        <el-button size="small" type="primary" plain @click="copyOne(row)">
-                            复制
-                        </el-button>
-                        <el-button size="small" type="success" plain @click="save(row)">
-                            保存
-                        </el-button>
+                        <div class="magnet-actions">
+                            <el-button size="small" type="warning" plain @click="stage(row)">
+                                暂存
+                            </el-button>
+                            <el-button size="small" type="primary" plain @click="copyOne(row)">
+                                复制
+                            </el-button>
+                            <el-button size="small" type="success" plain @click="save(row)">
+                                保存
+                            </el-button>
+                            <el-button
+                                size="small"
+                                type="primary"
+                                :loading="downloading.has(row.magnet)"
+                                @click="download(row.magnet)"
+                            >
+                                下载
+                            </el-button>
+                        </div>
                     </template>
                 </el-table-column>
             </el-table>
@@ -88,6 +98,7 @@ const loading = ref(false)
 const refreshing = ref(false)
 const error = ref('')
 const magnets = ref([])
+const downloading = ref(new Set())
 
 watch(visible, (v) => {
     if (v) load()
@@ -107,17 +118,17 @@ async function load() {
     }
 }
 
-/** 重新拉取 javbus 最新磁力并增量入库，然后刷新列表。 */
+/** 重新拉取 JavBus 最新磁力并显示结果。 */
 async function refresh() {
     refreshing.value = true
     try {
         const res = await javbusApi.refreshMagnets(props.code)
-        if (res.success) {
-            ElMessage.success(res.message || '刷新完成')
+        if (Array.isArray(res.data?.magnets)) {
+            magnets.value = res.data.magnets
         } else {
-            ElMessage.error(res.message || '刷新失败')
+            await load()
         }
-        await load()
+        ElMessage.success(res.message || '刷新完成')
     } catch (e) {
         ElMessage.error('刷新磁力失败：' + e.message)
     } finally {
@@ -175,6 +186,23 @@ async function save(row) {
         ElMessage.error('保存失败：' + e.message)
     }
 }
+
+async function download(magnet) {
+    if (downloading.value.has(magnet)) return
+    downloading.value.add(magnet)
+    try {
+        const res = await javbusApi.downloadMagnet(props.code, magnet)
+        if (res.data === 'ALREADY_EXISTS') {
+            ElMessage.info(res.message || '已存在')
+        } else {
+            ElMessage.success(res.message || '已提交到 qBittorrent')
+        }
+    } catch (e) {
+        ElMessage.error('提交下载失败：' + e.message)
+    } finally {
+        downloading.value.delete(magnet)
+    }
+}
 </script>
 
 <style scoped>
@@ -193,5 +221,23 @@ async function save(row) {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 10px;
+}
+
+.magnet-actions {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+}
+
+.magnet-actions :deep(.el-button) {
+    margin: 0;
+}
+
+@media (max-width: 767px) {
+    .magnet-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+    }
 }
 </style>

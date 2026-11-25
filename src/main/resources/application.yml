@@ -1,4 +1,7 @@
 spring:
+    config:
+        import: optional:file:./application-qbittorrent-local.yml
+
     # 应用名（日志/监控用）
     application:
         name: javspy

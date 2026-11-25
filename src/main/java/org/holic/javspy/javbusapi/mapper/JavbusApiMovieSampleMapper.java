@@ -20,6 +20,8 @@ public interface JavbusApiMovieSampleMapper extends BaseMapper<JavbusApiMovieSam
     /** 按影片 code 查询预览图列表。 */
     List<JavbusApiMovieSample> findByCode(@Param("code") String code);
 
+    JavbusApiMovieSample findByCodeAndId(@Param("code") String code, @Param("id") Long id);
+
     /** 删除某部影片的全部预览图。 */
     int deleteByMovieId(@Param("movieId") Long movieId);
 }

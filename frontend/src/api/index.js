@@ -58,6 +58,12 @@ export const javbusApi = {
     // 影片详情
     movieDetail: (code) => http.get('/javbus-api/movie', { params: { code } }),
 
+    movieImageUrl: (code, sampleId = null, thumbnail = false) => {
+        const params = new URLSearchParams({ code, thumbnail })
+        if (sampleId != null) params.set('sampleId', sampleId)
+        return '/javbus-api/movie/image?' + params.toString()
+    },
+
     // 演员详情
     starDetail: (id, type = 'normal') => http.get('/javbus-api/star', { params: { id, type } }),
 
@@ -76,7 +82,9 @@ export const javbusApi = {
     saveMagnet: (code, magnet) =>
         http.post('/javbus-api/magnets/save', null, { params: { code, magnet } }),
 
-    // 刷新单部影片磁力（重拉 javbus-api 增量入库）
+    downloadMagnet: (code, magnet) => http.post('/javbus-api/magnets/download', { code, magnet }),
+
+    // 刷新单部影片磁力
     refreshMagnets: (code) =>
         http.post('/javbus-api/magnets/refresh', null, { params: { code } }),
 

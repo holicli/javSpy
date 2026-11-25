@@ -1,10 +1,6 @@
 package org.holic.javspy.misc;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
+import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -15,13 +11,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 
 import javax.annotation.PostConstruct;
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.net.URLDecoder;
-import java.net.InetSocketAddress;
-import java.net.Proxy;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -93,21 +93,16 @@ public class ImageDownloadService {
         Path localFilePath = storageDir.resolve(fileName);
 
         // 检查文件是否已存在
-        if (Files.exists(localFilePath)) {
+        if (Files.isRegularFile(localFilePath) && Files.size(localFilePath) > 0) {
             return generateAccessUrl(fileName);
         }
 
-        // 下载图片
-        boolean downloadSuccess = false;
-
+        boolean downloadSuccess;
         try {
             downloadSuccess = downloadImage(imageUrl, localFilePath, referer);
-        } catch (Exception e) {
-            // 捕获所有异常，包括超时
-            System.err.println("下载图片失败（可能是超时）: " + imageUrl);
-            e.printStackTrace();
-            downloadSuccess = false;
-            return null; // 或者返回一个默认图片地址
+        } catch (IOException | IllegalArgumentException e) {
+            System.err.println("下载图片失败: " + imageUrl + " (" + e.getMessage() + ")");
+            return null;
         }
 
         if (downloadSuccess) {
@@ -115,6 +110,27 @@ public class ImageDownloadService {
         } else {
             throw new IOException("图片下载失败: " + imageUrl);
         }
+    }
+
+    /** 缓存详情图片，避免同名缩略图、大图或不同影片的图片互相覆盖。 */
+    public String getCachedImageUrl(String source, String referer) throws IOException {
+        if (StringUtils.isBlank(source)) {
+            return null;
+        }
+        String url = normalizeAccessUrl(source.trim());
+        if (url.startsWith("/pic/")) {
+            String fileName = extractFileName(url);
+            Path file = Paths.get(getImgPath(), fileName);
+            return Files.isRegularFile(file) && Files.size(file) > 0 ? generateAccessUrl(fileName) : null;
+        }
+
+        HttpUrl imageUrl = HttpUrl.get(referer).resolve(url);
+        if (imageUrl == null) {
+            return null;
+        }
+        String fileName = "detail-" + UUID.nameUUIDFromBytes(imageUrl.toString().getBytes(StandardCharsets.UTF_8))
+                + getFileExtensionFromUrl(imageUrl.encodedPath());
+        return getImageUrl(imageUrl.toString(), fileName, referer);
     }
 
     /**
@@ -141,15 +157,22 @@ public class ImageDownloadService {
             if (contentType == null || !contentType.startsWith("image/")) {
                 throw new IOException("不是图片类型: " + contentType);
             }
-            try (InputStream inputStream = body.byteStream();
-                 FileOutputStream outputStream = new FileOutputStream(savePath.toFile())) {
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
+            Path temporaryFile = Files.createTempFile(savePath.getParent(), ".download-", ".tmp");
+            try {
+                try (InputStream inputStream = body.byteStream()) {
+                    if (Files.copy(inputStream, temporaryFile, StandardCopyOption.REPLACE_EXISTING) == 0) {
+                        return false;
+                    }
                 }
+                try {
+                    Files.move(temporaryFile, savePath, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException e) {
+                    Files.move(temporaryFile, savePath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                return true;
+            } finally {
+                Files.deleteIfExists(temporaryFile);
             }
-            return true;
         }
     }
 
@@ -230,7 +253,7 @@ public class ImageDownloadService {
         if (StringUtils.isBlank(url)) {
             return url;
         }
-        return url.replaceAll("(?i)^https?://(127\\.0\\.0\\.1|localhost):\\d+/pic/", "/pic/");
+        return url.replaceAll("(?i)^https?://(127\\.0\\.0\\.1|localhost)(?::\\d+)?/pic/", "/pic/");
     }
 
     /**
