@@ -120,6 +120,12 @@
                     <span v-else class="text-muted">—</span>
                 </template>
             </el-table-column>
+            <el-table-column label="下载" width="108" align="center">
+                <template #default="{ row }">
+                    <span v-if="isDownloading(row.code)" class="badge badge-running">正在下载</span>
+                    <span v-else class="text-muted">—</span>
+                </template>
+            </el-table-column>
             <el-table-column label="操作" width="215" align="center" fixed="right">
                 <template #default="{ row }">
                     <el-button size="small" type="primary" plain @click="openDetail(row.code)">详情</el-button>
@@ -143,6 +149,7 @@
                 v-for="row in rows"
                 :key="row.code"
                 :movie="row"
+                :downloading="isDownloading(row.code)"
                 @open-detail="openDetail"
             />
         </div>
@@ -173,6 +180,7 @@ import { javbusApi } from '@/api'
 import MovieDetailDialog from '@/components/MovieDetailDialog.vue'
 import MagnetDialog from '@/components/MagnetDialog.vue'
 import MobileMovieCard from '@/components/MobileMovieCard.vue'
+import { useDownloadStatus } from '@/composables/useDownloadStatus'
 import { useMobile } from '@/composables/useMobile'
 import { isStaged } from '@/store/staging'
 
@@ -180,6 +188,7 @@ const isMobile = useMobile()
 
 const keyword = ref('')
 const rows = ref([])
+const isDownloading = useDownloadStatus(rows)
 const loading = ref(false)
 const searching = ref(false)
 const scrapingPage = ref(false)

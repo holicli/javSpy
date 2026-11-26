@@ -47,4 +47,5 @@ build/
 .env
 .env.local
 application-local.yml
+/application-qbittorrent-local.yml
 pic/

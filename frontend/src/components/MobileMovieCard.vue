@@ -18,6 +18,7 @@
         </div>
         <div class="info">
             <div class="code" :class="{ 'staged-code': isStaged(movie.code) }">{{ movie.code }}</div>
+            <span v-if="downloading" class="badge badge-running">正在下载</span>
             <div class="title">{{ movie.title || '—' }}</div>
             <div class="meta">
                 <span>{{ movie.releaseDate || '—' }}</span>
@@ -33,7 +34,8 @@
 import { isStaged } from '@/store/staging'
 
 defineProps({
-    movie: { type: Object, required: true }
+    movie: { type: Object, required: true },
+    downloading: Boolean
 })
 defineEmits(['open-detail'])
 </script>

@@ -197,6 +197,7 @@ async function download(magnet) {
         } else {
             ElMessage.success(res.message || '已提交到 qBittorrent')
         }
+        window.dispatchEvent(new Event('javspy:downloads-changed'))
     } catch (e) {
         ElMessage.error('提交下载失败：' + e.message)
     } finally {

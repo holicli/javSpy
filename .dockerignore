@@ -1,0 +1,13 @@
+# 构建上下文排除项，加快 docker build 并避免把本机文件带进镜像
+.git
+.gitignore
+.idea
+target
+**/target
+frontend/node_modules
+frontend/dist
+**/*.iml
+.env
+**/application-local.yml
+application-qbittorrent-local.yml
+pic

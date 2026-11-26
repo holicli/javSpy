@@ -21,6 +21,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.Matchers.contains;
 import static org.holic.javspy.javbusapi.client.QbittorrentClient.AddResult.ADDED;
 import static org.holic.javspy.javbusapi.client.QbittorrentClient.AddResult.ALREADY_EXISTS;
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,6 +35,7 @@ class QbittorrentClientTest {
     private static final String TORRENT_INFO = "[{\"name\":\"[Group] test_001 - 1080p\"}]";
     private static final String QBIT_URL = "http://qbittorrent.example.test:8085";
     private static final String DOWNLOAD_PATH = "/javbus-api/magnets/download";
+    private static final String DOWNLOADING_PATH = "/javbus-api/magnets/downloading";
 
     private final List<Request> requests = new ArrayList<>();
     private final Deque<Response.Builder> responses = new ArrayDeque<>();
@@ -43,6 +45,35 @@ class QbittorrentClientTest {
                 requests.add(chain.request());
                 return responses.removeFirst().request(chain.request()).build();
             }).build());
+
+    @Test
+    void reportsOnlyRequestedCodesWithDownloadsInProgress() throws Exception {
+        reply(200, "Ok.").addHeader("Set-Cookie", "SID=fixture; Path=/");
+        reply(200, "["
+                + "{\"name\":\"[Group] test_001 - 1080p\",\"state\":\"downloading\"},"
+                + "{\"name\":\"Untitled torrent\",\"tags\":\"archive, TAG-002\",\"state\":\"metaDL\"},"
+                + "{\"name\":\"PAUSE-003\",\"state\":\"pausedDL\"},"
+                + "{\"name\":\"DONE-004\",\"state\":\"uploading\"},"
+                + "{\"name\":\"WAIT-005\",\"state\":\"queuedDL\"},"
+                + "{\"name\":\"PEERS-006\",\"state\":\"stalledDL\"},"
+                + "{\"name\":\"TEST-0100\",\"state\":\"forcedDL\"},"
+                + "{\"name\":\"OTHER-007\",\"state\":\"downloading\"}"
+                + "]");
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new MagnetDownloadController(client)).build();
+        List<String> codes = List.of("test-001", "TAG-002", "PAUSE-003", "DONE-004", "WAIT-005",
+                "PEERS-006", "TEST-010", "test-001");
+
+        mvc.perform(post(DOWNLOADING_PATH)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(codes)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data", contains("test-001", "TAG-002", "PEERS-006")));
+
+        assertEquals(2, requests.size());
+        assertEquals("GET", requests.get(1).method());
+        assertEquals("/api/v2/torrents/info", requests.get(1).url().encodedPath());
+    }
 
     @Test
     void checksForAnExactCodeBeforeSubmittingToTheDefaultLocation() throws Exception {

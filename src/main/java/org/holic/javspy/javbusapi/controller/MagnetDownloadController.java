@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -17,6 +18,15 @@ public class MagnetDownloadController {
 
     public MagnetDownloadController(QbittorrentClient qbittorrent) {
         this.qbittorrent = qbittorrent;
+    }
+
+    @PostMapping(path = "/javbus-api/magnets/downloading", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public WebResult<List<String>> downloading(@RequestBody List<String> codes) {
+        try {
+            return new WebResult<>(true, qbittorrent.downloadingCodes(codes), null);
+        } catch (IllegalStateException e) {
+            return new WebResult<>(false, e.getMessage());
+        }
     }
 
     @PostMapping(path = "/javbus-api/magnets/download", consumes = MediaType.APPLICATION_JSON_VALUE)

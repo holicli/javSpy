@@ -84,6 +84,8 @@ export const javbusApi = {
 
     downloadMagnet: (code, magnet) => http.post('/javbus-api/magnets/download', { code, magnet }),
 
+    downloadingCodes: (codes) => http.post('/javbus-api/magnets/downloading', codes),
+
     // 刷新单部影片磁力
     refreshMagnets: (code) =>
         http.post('/javbus-api/magnets/refresh', null, { params: { code } }),

@@ -18,8 +18,10 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -30,6 +32,8 @@ public class QbittorrentClient {
     private static final String MAGNET_PREFIX = "magnet:?";
     private static final Pattern FILM_CODE = Pattern.compile("[A-Z0-9]+(?:[ ._-]+[A-Z0-9]+)*");
     private static final String CODE_SEPARATOR = "[ ._-]*";
+    private static final Set<String> DOWNLOADING_STATES = Set.of(
+            "downloading", "forcedDL", "metaDL", "forcedMetaDL", "stalledDL", "allocating");
 
     public enum AddResult {
         ADDED,
@@ -66,6 +70,9 @@ public class QbittorrentClient {
 
     public synchronized AddResult addMagnet(String code, String magnet) {
         String filmCode = normalizeCode(code);
+        if (filmCode == null) {
+            throw new IllegalArgumentException("请提供有效的影片番号");
+        }
         Pattern titleCode = titleCodePattern(filmCode);
         String link = StringUtils.trimToEmpty(magnet);
         if (!StringUtils.startsWithIgnoreCase(link, MAGNET_PREFIX)
@@ -73,7 +80,7 @@ public class QbittorrentClient {
                 || link.chars().anyMatch(Character::isISOControl)) {
             throw new IllegalArgumentException("请提供一条有效的磁力链接");
         }
-        if (baseUrl == null || StringUtils.isAnyBlank(username, password)) {
+        if (!isConfigured()) {
             throw new IllegalStateException("请先配置 qBittorrent 地址、账号和密码");
         }
 
@@ -94,11 +101,36 @@ public class QbittorrentClient {
         }
     }
 
+    public synchronized List<String> downloadingCodes(List<String> codes) {
+        if (!isConfigured() || codes.isEmpty()) {
+            return List.of();
+        }
+        try {
+            List<TorrentInfo> downloading = listTorrents().stream()
+                    .filter(torrent -> DOWNLOADING_STATES.contains(torrent.state))
+                    .collect(Collectors.toList());
+            return codes.stream().distinct().filter(code -> {
+                String filmCode = normalizeCode(code);
+                if (filmCode == null) {
+                    return false;
+                }
+                Pattern titleCode = titleCodePattern(filmCode);
+                return downloading.stream().anyMatch(torrent -> torrent.matches(titleCode));
+            }).collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new IllegalStateException("无法读取 qBittorrent 下载状态", e);
+        }
+    }
+
+    private boolean isConfigured() {
+        return baseUrl != null && !StringUtils.isAnyBlank(username, password);
+    }
+
     private static String normalizeCode(String code) {
         String normalized = Normalizer.normalize(StringUtils.trimToEmpty(code), Normalizer.Form.NFKC)
                 .trim().toUpperCase(Locale.ROOT);
         if (normalized.length() > 64 || !FILM_CODE.matcher(normalized).matches()) {
-            throw new IllegalArgumentException("请提供有效的影片番号");
+            return null;
         }
         return normalized.replaceAll("[ ._-]+", "-");
     }
@@ -113,27 +145,45 @@ public class QbittorrentClient {
     }
 
     private boolean torrentExists(Pattern titleCode) throws IOException {
+        return listTorrents().stream().anyMatch(torrent -> torrent.matches(titleCode));
+    }
+
+    private List<TorrentInfo> listTorrents() throws IOException {
         Request request = new Request.Builder().url(apiUrl("torrents/info"))
                 .header("Referer", baseUrl.toString()).get().build();
         try (Response response = executeAuthenticated(request)) {
             if (!response.isSuccessful()) {
-                throw new IllegalStateException("无法检查 qBittorrent 中的现有任务（HTTP " + response.code() + "）");
+                throw new IllegalStateException("无法读取 qBittorrent 任务列表（HTTP " + response.code() + "）");
             }
             ResponseBody body = response.body();
             JsonNode torrents = body == null ? null : objectMapper.readTree(body.byteStream());
             if (torrents == null || !torrents.isArray()) {
                 throw new IllegalStateException("qBittorrent 返回了无法识别的任务列表");
             }
-            for (JsonNode torrent : torrents) {
-                String name = Normalizer.normalize(torrent.path("name").asText(), Normalizer.Form.NFKC);
-                if (titleCode.matcher(name).find()) {
+            List<TorrentInfo> results = new ArrayList<>(torrents.size());
+            torrents.forEach(torrent -> results.add(new TorrentInfo(torrent)));
+            return results;
+        }
+    }
+
+    private static final class TorrentInfo {
+        private final String name;
+        private final String[] tags;
+        private final String state;
+
+        private TorrentInfo(JsonNode torrent) {
+            name = Normalizer.normalize(torrent.path("name").asText(), Normalizer.Form.NFKC);
+            tags = Normalizer.normalize(torrent.path("tags").asText(), Normalizer.Form.NFKC).split(",");
+            state = torrent.path("state").asText();
+        }
+
+        private boolean matches(Pattern titleCode) {
+            if (titleCode.matcher(name).find()) {
+                return true;
+            }
+            for (String tag : tags) {
+                if (titleCode.matcher(tag.trim()).matches()) {
                     return true;
-                }
-                String tags = Normalizer.normalize(torrent.path("tags").asText(), Normalizer.Form.NFKC);
-                for (String tag : tags.split(",")) {
-                    if (titleCode.matcher(tag.trim()).matches()) {
-                        return true;
-                    }
                 }
             }
             return false;
