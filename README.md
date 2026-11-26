@@ -95,6 +95,23 @@ EnvironmentFile=/etc/javspy/javspy.env
 
 然后执行 `sudo systemctl daemon-reload` 和 `sudo systemctl restart javspy`。
 
+如果已在 Windows 的 IDEA `JavspyApplication` 运行配置里填过变量，可以直接导出，不用重新输入：
+
+```powershell
+.\scripts\export-idea-env.ps1
+```
+
+脚本只读取该运行配置中的 `JAVSPY_*` 设置，写入 Git 忽略的 `target/javspy.env`，默认不导出
+Emby 永久删除令牌。通过 SSH 等安全方式把文件传到 Linux 后，收紧上传文件权限并安装为服务配置：
+
+```bash
+chmod 600 "$HOME/javspy.env"
+sudo install -D -m 600 "$HOME/javspy.env" /etc/javspy/javspy.env
+sudo systemctl restart javspy
+```
+
+`install` 会替换已有配置，运行前请确认。数据库和 Emby 地址仍须能从 Linux 服务器访问。
+
 如果不用 systemd，可以把文件写到当前用户的配置目录，再由 Bash 加载并启动已构建的 JAR：
 
 ```bash
